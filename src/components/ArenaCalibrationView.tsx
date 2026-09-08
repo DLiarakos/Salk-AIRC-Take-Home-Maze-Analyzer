@@ -479,32 +479,28 @@ export default function ArenaCalibrationView({
     </label>
 
     <label>
-      <span>Platform diameter</span>
+  <span>Physical platform diameter</span>
 
-      <input
-        type="number"
-        min="0"
-        step="0.1"
-        value={
-          calibration.platformDiameterCm ??
-          ''
-        }
-        placeholder="Optional"
-        onChange={(event) => {
-          const value =
-            event.target.value;
+  <input
+    type="number"
+    min="0"
+    step="0.1"
+    value={calibration.platformDiameterCm ?? ''}
+    placeholder="Optional"
+    onChange={(event) => {
+      const value = event.target.value;
 
-          updateCalibration({
-            platformDiameterCm:
-              value === ''
-                ? null
-                : Number(value),
-          });
-        }}
-      />
+      updateCalibration({
+        platformDiameterCm:
+          value === '' ? null : Number(value),
+      });
+    }}
+  />
 
-      <span>cm</span>
-    </label>
+  <span>
+    cm — entire circular platform, not hole diameter
+  </span>
+</label>
   </div>
 )}
     </section>

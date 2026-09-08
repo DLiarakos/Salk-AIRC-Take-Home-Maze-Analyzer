@@ -261,3 +261,30 @@ export interface ProcessedTrajectory {
   qc: TrajectoryQcSummary;
   settings: TrajectorySmoothingSettings;
 }
+export interface HoleRoi {
+  index: number;
+
+  automaticCenterX: number;
+  automaticCenterY: number;
+
+  centerX: number;
+  centerY: number;
+
+  radiusPixels: number;
+  isTarget: boolean;
+  manuallyAdjusted: boolean;
+}
+
+export interface HoleGeometry {
+  holeCount: number;
+  holeRadiusPixels: number;
+  targetHoleIndex: number;
+
+  homography: [
+    number,number,number,
+    number,number,number,
+    number,number,
+  ];
+
+  holes: HoleRoi[];
+}
