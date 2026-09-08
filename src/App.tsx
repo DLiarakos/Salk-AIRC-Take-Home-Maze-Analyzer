@@ -19,7 +19,6 @@ import type { FrameTiming } from './models/media';
 import type { DecodeResult, ExactFrameReviewSession, ExactReviewFrame } from './video/decoderClient';
 import { decodeVideoFile, decoderCapabilities, createExactFrameReviewSession } from './video/decoderClient';
 import { timeToSeconds } from './video/time';
-import GrayscalePreview from './components/GrayscalePreview';
 import BackgroundPreview from './components/BackgroundPreview';
 import ArenaCalibrationView from './components/ArenaCalibrationView';
 import type {
@@ -5969,12 +5968,23 @@ export default function App() {
       : null;
   return (<main className="page-shell">
     <section className="card" aria-labelledby="page-title">
-      <p className="eyebrow">Prototype {TOOL_VERSION}</p>
-      <h1 id="page-title">Barnes Maze Analyzer</h1>
-      <p className="lede">
-        Initial decoder validation: choose a local Barnes maze MP4 to inspect its exact
-        presentation timestamps. The video stays on this computer.
-      </p>
+      <div className="app-title-row">
+        <div>
+          <h1 id="page-title">
+            Barnes Maze Analyzer
+          </h1>
+
+          <p className="lede">
+            Analyze Barnes maze behavior from local video, review detected
+            investigations and tracking, and export reproducible behavioral results.
+            Video processing remains local to this browser.
+          </p>
+        </div>
+
+        <span className="app-version-badge">
+          v{TOOL_VERSION}
+        </span>
+      </div>
 
       {!capabilities.webCodecs && (<div className="notice notice-error" role="alert">
         This browser does not expose WebCodecs VideoDecoder. Decoder analysis cannot run here.
@@ -6466,110 +6476,142 @@ export default function App() {
       </div>)}
     </section>
 
-    {result && (<section className="card" aria-labelledby="metadata-heading">
-      <h2 id="metadata-heading">Decoder check</h2>
-      <dl className="metadata-grid">
+    {result && (<section
+      className="card"
+      aria-labelledby="source-video-heading"
+    >
+      <div className="app-section-heading">
+        <div>
+          <h2 id="source-video-heading">
+            Source video
+          </h2>
+
+          <p>
+            Decoded source information and timing validation for the
+            current recording.
+          </p>
+        </div>
+
+        <span
+          className={
+            result.timingValidation.decodeIntegrityValid
+              ? 'status-badge status-pass'
+              : 'status-badge status-fail'
+          }
+        >
+          {result.timingValidation.decodeIntegrityValid
+            ? 'Decode valid'
+            : 'Decode failed'}
+        </span>
+      </div>
+
+      <dl className="source-video-summary">
         <div>
           <dt>File</dt>
           <dd>{result.metadata.identity.name}</dd>
         </div>
-        <div>
-          <dt>Codec</dt>
-          <dd>{result.metadata.codec}</dd>
-        </div>
+
         <div>
           <dt>Resolution</dt>
           <dd>
             {result.metadata.width} × {result.metadata.height}
           </dd>
         </div>
+
         <div>
-          <dt>Track timescale</dt>
-          <dd>{result.metadata.trackTimescale.toLocaleString()} ticks/s</dd>
-        </div>
-        <div>
-          <dt>Container frame count</dt>
-          <dd>{result.metadata.frameCount.toLocaleString()}</dd>
-        </div>
-        <div>
-          <dt>Decoded frame count</dt>
-          <dd>{result.decodedFrames.toLocaleString()}</dd>
-        </div>
-        <div>
-          <dt>Container-derived average rate</dt>
-          <dd>
-            {result.metadata.nominalFps === null
-              ? 'Unavailable'
-              : `${result.metadata.nominalFps.toFixed(6)} fps`}
-          </dd>
-        </div>
-        <div>
-          <dt>Median PTS cadence</dt>
-          <dd>
-            {result.timingValidation.medianFrameIntervalTicks !== null
-              ? `${(result.metadata.trackTimescale /
-                result.timingValidation.medianFrameIntervalTicks).toFixed(6)} fps`
-              : 'Unavailable'}
-          </dd>
-        </div>
-        <div>
-          <dt>First presentation timestamp</dt>
-          <dd>{first ? formatSeconds(timeToSeconds(first.pts)) : 'Unavailable'}</dd>
-        </div>
-        <div>
-          <dt>Last presentation timestamp</dt>
-          <dd>{last ? formatSeconds(timeToSeconds(last.pts)) : 'Unavailable'}</dd>
-        </div>
-        <div>
-          <dt>First-to-last PTS span</dt>
+          <dt>Presentation span</dt>
           <dd>
             {durationFromPresentation === null
               ? 'Unavailable'
               : formatSeconds(durationFromPresentation)}
           </dd>
         </div>
+
+        <div>
+          <dt>Timing</dt>
+          <dd>
+            {result.timingValidation.timingRegular
+              ? 'Regular'
+              : 'Irregular · exact timestamps preserved'}
+          </dd>
+        </div>
       </dl>
-      {result && (<section className="card">
-        <h2>Timing integrity</h2>
 
-        <dl className="decoder-grid">
+      <details className="app-debug-details">
+        <summary>
+          Advanced video diagnostics
+        </summary>
+
+        <p>
+          Decoder and exact-timestamp details retained for troubleshooting
+          and reproducibility.
+        </p>
+
+        <dl className="metadata-grid compact-debug-grid">
           <div>
-            <dt>Decode integrity</dt>
+            <dt>Codec</dt>
+            <dd>{result.metadata.codec}</dd>
+          </div>
+
+          <div>
+            <dt>Container frames</dt>
+            <dd>{result.metadata.frameCount.toLocaleString()}</dd>
+          </div>
+
+          <div>
+            <dt>Decoded frames</dt>
+            <dd>{result.decodedFrames.toLocaleString()}</dd>
+          </div>
+
+          <div>
+            <dt>Track timescale</dt>
+            <dd>{result.metadata.trackTimescale.toLocaleString()} ticks/s</dd>
+          </div>
+
+          <div>
+            <dt>Container average rate</dt>
             <dd>
-              {result.timingValidation.decodeIntegrityValid
-                ? 'Pass'
-                : 'Failed'}
+              {result.metadata.nominalFps === null
+                ? 'Unavailable'
+                : `${result.metadata.nominalFps.toFixed(6)} fps`}
             </dd>
           </div>
 
           <div>
-            <dt>Timing regularity</dt>
+            <dt>Median PTS cadence</dt>
             <dd>
-              {result.timingValidation.timingRegular
-                ? 'Regular'
-                : 'Irregular — source timestamps preserved'}
+              {result.timingValidation.medianFrameIntervalTicks !== null
+                ? `${(
+                  result.metadata.trackTimescale /
+                  result.timingValidation.medianFrameIntervalTicks
+                ).toFixed(6)} fps`
+                : 'Unavailable'}
             </dd>
           </div>
 
+          <div>
+            <dt>First presentation timestamp</dt>
+            <dd>
+              {first
+                ? formatSeconds(timeToSeconds(first.pts))
+                : 'Unavailable'}
+            </dd>
+          </div>
+
+          <div>
+            <dt>Last presentation timestamp</dt>
+            <dd>
+              {last
+                ? formatSeconds(timeToSeconds(last.pts))
+                : 'Unavailable'}
+            </dd>
+          </div>
         </dl>
-      </section>)}
-      {result &&
-        result.representativeFrames.length > 0 && (<section className="card">
-          <h2>
-            Representative decoded frames
-          </h2>
+      </details>
+    </section>)}
 
-          <p>
-            Grayscale luminance extracted directly
-            from the decoded video frames.
-          </p>
-
-          <div className="preview-grid">
-            {result.representativeFrames
-              .sort((a, b) => a.decodedIndex -
-                b.decodedIndex)
-              .map((frame) => (<GrayscalePreview key={`${frame.decodedIndex}-${frame.timing.pts.ticks}`} frame={frame} />))}
-          </div>
+    {result &&
+      result.representativeFrames.length > 0 && (<>
           {calibrationFrame && (<ArenaCalibrationView
             frame={calibrationFrame}
             calibration={arenaCalibration}
@@ -7225,7 +7267,7 @@ export default function App() {
                       </td>
 
                       <td>
-                        Hole {event.holeIndex}
+                        Hole {event.holeIndex + 1}
                       </td>
 
                       <td>
@@ -7503,7 +7545,7 @@ export default function App() {
                       </td>
 
                       <td>
-                        {event.holeIndex}
+                        {event.holeIndex + 1}
                         {event.isTarget
                           ? ' · target'
                           : ''}
@@ -7822,7 +7864,7 @@ export default function App() {
                                 </td>
 
                                 <td>
-                                  {event.holeIndex}
+                                  {event.holeIndex + 1}
                                 </td>
 
                                 <td>
@@ -8437,7 +8479,7 @@ export default function App() {
                   <dt>Target hole</dt>
                   <dd>
                     {targetQuadrantMetrics
-                      .targetHoleIndex}
+                      .targetHoleIndex + 1}
                   </dd>
                 </div>
 
@@ -8603,8 +8645,8 @@ export default function App() {
 
               <p>
                 Automatic strategy classification is
-                heuristic and is intended as an
-                interpretable prototype. It uses search
+                heuristic and intended as an interpretable
+                behavioral classification aid. It uses search
                 behavior before the first target-hole
                 investigation. A scientist may override
                 the automatic classification without
@@ -8827,6 +8869,7 @@ export default function App() {
                   <dd>
                     {searchStrategyResult
                       .investigatedHoleSequence
+                      .map((holeIndex) => holeIndex + 1)
                       .join(' → ') ||
                       'No investigation sequence'}
                   </dd>
@@ -9242,23 +9285,6 @@ export default function App() {
                 : 'automatic'}
             </dd>
           </div>)}
-          <div>
-            <dt>
-              Manual track corrections
-            </dt>
-
-            <dd>
-              {Object.keys(manualTrackPointCorrections).length}
-            </dd>
-          </div>
-          <div>
-            <dt>Detection after trial start</dt>
-            <dd>
-              {trialDetectionRate !== null
-                ? `${(trialDetectionRate * 100).toFixed(1)}%`
-                : 'Unavailable'}
-            </dd>
-          </div>
           {cleanedBodyTrack &&
             result?.background &&
             trialWindow &&
@@ -9526,122 +9552,6 @@ export default function App() {
               to report path length and speed in centimeters.
             </p>)}
           </section>)}
-        </section>)}
-      <h3>First decoded timestamps</h3>
-      <div className="table-scroll" tabIndex={0} aria-label="First decoded frame timestamps">
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">Presentation frame</th>
-              <th scope="col">PTS ticks</th>
-              <th scope="col">Timescale</th>
-              <th scope="col">PTS seconds</th>
-              <th scope="col">WebCodecs µs</th>
-              <th scope="col">Key frame</th>
-            </tr>
-          </thead>
-          <tbody>
-            {result.frames.slice(0, 12).map((frame: FrameTiming) => (<tr key={`${frame.sampleIndex}-${frame.webCodecsTimestampUs}`}>
-              <td>{frame.presentationIndex ?? '—'}</td>
-              <td>{frame.pts.ticks}</td>
-              <td>{frame.pts.timescale}</td>
-              <td>{timeToSeconds(frame.pts).toFixed(9)}</td>
-              <td>{frame.webCodecsTimestampUs}</td>
-              <td>{frame.isKeyFrame ? 'Yes' : 'No'}</td>
-            </tr>))}
-          </tbody>
-        </table>
-      </div>
-    </section>)}
+        </>)}
   </main>);
-}
-{ /*
-   <div>
-    <dt>Expected frames</dt>
-    <dd>
-     {result.timingValidation.expectedFrameCount}
-    </dd>
-   </div>
-
-   <div>
-    <dt>Decoded frames</dt>
-    <dd>
-     {result.timingValidation.decodedFrameCount}
-    </dd>
-   </div>
-
-   <div>
-    <dt>Timing records</dt>
-    <dd>
-     {result.timingValidation.timingRecordCount}
-    </dd>
-   </div>
-
-   <div>
-    <dt>Unique PTS</dt>
-    <dd>
-     {result.timingValidation.uniquePtsCount}
-    </dd>
-   </div>
-
-   <div>
-    <dt>Duplicate PTS</dt>
-    <dd>
-     {result.timingValidation.duplicatePtsCount}
-    </dd>
-   </div>
-
-   <div>
-    <dt>Minimum frame interval</dt>
-    <dd>
-     {result.timingValidation.minimumFrameIntervalTicks !== null
-      ? `${result.timingValidation.minimumFrameIntervalTicks} ticks`
-      : 'Unavailable'}
-    </dd>
-   </div>
-
-   <div>
-    <dt>Median frame interval</dt>
-    <dd>
-     {result.timingValidation.medianFrameIntervalTicks !== null
-      ? `${result.timingValidation.medianFrameIntervalTicks} ticks`
-      : 'Unavailable'}
-    </dd>
-   </div>
-
-   <div>
-    <dt>Maximum frame interval</dt>
-    <dd>
-     {result.timingValidation.maximumFrameIntervalTicks !== null
-      ? `${result.timingValidation.maximumFrameIntervalTicks} ticks`
-      : 'Unavailable'}
-    </dd>
-   </div>
-
-   <div>
-    <dt>Timing mode</dt>
-    <dd>
-     {result.timingValidation.isConstantFrameRate
-      ? 'Constant'
-      : 'Variable'}
-    </dd>
-   </div>
-
-   <div>
-    <dt>Equivalent frame rate</dt>
-    <dd>
-     {result.timingValidation.equivalentFps !== null
-      ? `${result.timingValidation.equivalentFps.toFixed(6)} fps`
-      : 'Unavailable'}
-    </dd>
-   </div>
-
-   <div>
-    <dt>PTS uniqueness</dt>
-    <dd>
-     {result.timingValidation.ptsAreUnique
-      ? 'All unique'
-      : 'Duplicates found'}
-    </dd>
-   </div>  */
 }
