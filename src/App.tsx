@@ -36,6 +36,7 @@ import { detectTrialStart } from './tracking/trialWindow';
 import TrajectoryPreview from './components/TrajectoryPreview';
 import { processTrajectory } from './tracking/trajectoryProcessing';
 import TrajectoryComparisonView from './components/TrajectoryComparisonView';
+import TimeColoredTrajectoryView from './components/TimeColoredTrajectoryView';
 import { computeTrajectoryMetrics } from './tracking/trajectoryMetrics';
 import HoleCalibrationView from './components/HoleCalibrationView';
 import { resolveTrackOrientation, summarizeOrientation } from './tracking/orientation';
@@ -9254,6 +9255,18 @@ export default function App() {
               trialWindow={trialWindow}
               calibration={arenaCalibration}
             />)}
+
+          {processedTrajectory &&
+            result?.background &&
+            arenaCalibration &&
+            holeGeometry && (<TimeColoredTrajectoryView
+              processedTrajectory={processedTrajectory}
+              background={result.background}
+              calibration={arenaCalibration}
+              holeGeometry={holeGeometry}
+              targetDefined={targetMetricsEnabled}
+            />)}
+          
           {processedTrajectory && (<section className="card">
             <h2>Trajectory QC</h2>
 
