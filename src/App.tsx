@@ -46,10 +46,16 @@ import {classifySearchStrategy,} from './tracking/searchStrategy';
 const SESSION_SCHEMA_VERSION = 1;
 
 const BATCH_SNAPSHOT_SCHEMA_VERSION =
-  1;
+  2;
 
 const TOOL_VERSION =
-  '0.9';
+  '0.96';
+
+const SETTINGS_PRESET_SCHEMA_VERSION =
+  1;
+
+const WORKSPACE_SCHEMA_VERSION =
+  1;
 
 const DEFAULT_SEGMENTATION_SETTINGS:
   SegmentationSettings = {
@@ -151,6 +157,148 @@ const DEFAULT_HOLE_INVESTIGATION_SETTINGS:
     minimumTransitionsForSerial:
       3,
   };
+
+  interface BarnesAnalysisSettingsBundle {
+  segmentation:
+    SegmentationSettings;
+
+  trajectorySmoothing:
+    TrajectorySmoothingSettings;
+
+  trajectoryOutlier:
+    TrajectoryOutlierSettings;
+
+  orientation:
+    OrientationSettings;
+
+  holeInvestigation:
+    HoleInvestigationSettings;
+
+  escapeDetection:
+    EscapeDetectionSettings;
+
+  searchStrategy:
+    SearchStrategySettings;
+}
+
+interface BarnesSettingsPresetFile {
+  kind:
+    'barnes-maze-settings';
+
+  schemaVersion:
+    typeof SETTINGS_PRESET_SCHEMA_VERSION;
+
+  toolVersion:
+    string;
+
+  exportedAtIso:
+    string;
+
+  settings:
+    BarnesAnalysisSettingsBundle;
+}
+interface BarnesWorkspaceFile {
+  kind:
+    'barnes-maze-workspace';
+
+  schemaVersion:
+    typeof WORKSPACE_SCHEMA_VERSION;
+
+  toolVersion:
+    string;
+
+  exportedAtIso:
+    string;
+
+  source: {
+    fileIdentity: {
+      name:
+        string;
+
+      size:
+        number;
+
+      lastModified:
+        number;
+    };
+
+    video: {
+      width:
+        number;
+
+      height:
+        number;
+
+      frameCount:
+        number;
+
+      decodedFrames:
+        number;
+
+      trackTimescale:
+        number;
+
+      firstPresentationPts: {
+        ticks:
+          number;
+
+        timescale:
+          number;
+      } | null;
+
+      lastPresentationPts: {
+        ticks:
+          number;
+
+        timescale:
+          number;
+      } | null;
+    };
+  };
+
+  analysis: {
+    /*
+     * Video-specific calibration belongs in
+     * the workspace, unlike a settings preset.
+     */
+    arenaCalibration:
+      ArenaCalibration | null;
+
+    holeGeometry:
+      HoleGeometry | null;
+
+    settings:
+      BarnesAnalysisSettingsBundle;
+
+    /*
+     * IMPORTANT:
+     * Store the immutable automatic track.
+     *
+     * Manual corrections remain separate below
+     * and are reapplied after import.
+     */
+    bodyTrack:
+      BodyTrack;
+
+    eventReviews:
+      HoleEventReviewDecisionMap;
+
+    manualHoleEventAdditions:
+      ManualHoleEventAddition[];
+
+    trialStartOverride:
+      TrialStartOverride | null;
+
+    manualTrackPointCorrections:
+      ManualTrackPointCorrectionMap;
+
+    escapeReviewDecision:
+      EscapeReviewDecision | null;
+
+    searchStrategyOverride:
+      SearchStrategyOverride | null;
+  };
+}
 interface SavedBarnesSession {
   schemaVersion: 1;
 
@@ -251,6 +399,288 @@ function readSavedSession(
   } catch {
     return null;
   }
+}
+
+function cloneAnalysisSettingsBundle(
+  settings:
+    BarnesAnalysisSettingsBundle,
+):
+  BarnesAnalysisSettingsBundle {
+  return {
+    segmentation: {
+      ...settings.segmentation,
+    },
+
+    trajectorySmoothing: {
+      ...settings
+        .trajectorySmoothing,
+    },
+
+    trajectoryOutlier: {
+      ...settings
+        .trajectoryOutlier,
+    },
+
+    orientation: {
+      ...settings.orientation,
+    },
+
+    holeInvestigation: {
+      ...settings
+        .holeInvestigation,
+    },
+
+    escapeDetection: {
+      ...settings
+        .escapeDetection,
+    },
+
+    searchStrategy: {
+      ...settings
+        .searchStrategy,
+    },
+  };
+}
+
+function isJsonRecord(
+  value:
+    unknown,
+): value is Record<
+  string,
+  unknown
+> {
+  return (
+    typeof value ===
+      'object' &&
+    value !== null &&
+    !Array.isArray(
+      value,
+    )
+  );
+}
+
+function parseSettingsGroup<
+  T extends object
+>(
+  value:
+    unknown,
+
+  template:
+    T,
+
+  label:
+    string,
+): T {
+  if (
+    !isJsonRecord(
+      value,
+    )
+  ) {
+    throw new Error(
+      `${label} settings are missing or invalid.`,
+    );
+  }
+
+  const validated:
+    Record<
+      string,
+      unknown
+    > = {};
+
+  for (
+    const [
+      key,
+      templateValue,
+    ] of Object.entries(
+      template,
+    )
+  ) {
+    const actual =
+      value[key];
+
+    if (
+      typeof templateValue ===
+      'number'
+    ) {
+      if (
+        typeof actual !==
+          'number' ||
+        !Number.isFinite(
+          actual,
+        )
+      ) {
+        throw new Error(
+          `${label}.${key} must be a finite number.`,
+        );
+      }
+
+      validated[key] =
+        actual;
+
+      continue;
+    }
+
+    if (
+      typeof templateValue ===
+      'boolean'
+    ) {
+      if (
+        typeof actual !==
+        'boolean'
+      ) {
+        throw new Error(
+          `${label}.${key} must be true or false.`,
+        );
+      }
+
+      validated[key] =
+        actual;
+
+      continue;
+    }
+
+    throw new Error(
+      `Unsupported setting type for ${label}.${key}.`,
+    );
+  }
+
+  return validated as
+    unknown as T;
+}
+
+function parseSettingsPresetText(
+  text:
+    string,
+):
+  BarnesSettingsPresetFile {
+  let value:
+    unknown;
+
+  try {
+    value =
+      JSON.parse(
+        text,
+      ) as unknown;
+  } catch {
+    throw new Error(
+      'The selected file is not valid JSON.',
+    );
+  }
+
+  if (
+    !isJsonRecord(
+      value,
+    )
+  ) {
+    throw new Error(
+      'The selected JSON does not contain a settings preset.',
+    );
+  }
+
+  if (
+    value.kind !==
+    'barnes-maze-settings'
+  ) {
+    throw new Error(
+      'This JSON is not a Barnes Maze settings preset.',
+    );
+  }
+
+  if (
+    value.schemaVersion !==
+    SETTINGS_PRESET_SCHEMA_VERSION
+  ) {
+    throw new Error(
+      `Unsupported settings schema version: ${String(
+        value.schemaVersion,
+      )}.`,
+    );
+  }
+
+  if (
+    typeof value.toolVersion !==
+      'string' ||
+    typeof value.exportedAtIso !==
+      'string' ||
+    !isJsonRecord(
+      value.settings,
+    )
+  ) {
+    throw new Error(
+      'The settings preset metadata is incomplete.',
+    );
+  }
+
+  const settings =
+    value.settings;
+
+  return {
+    kind:
+      'barnes-maze-settings',
+
+    schemaVersion:
+      SETTINGS_PRESET_SCHEMA_VERSION,
+
+    toolVersion:
+      value.toolVersion,
+
+    exportedAtIso:
+      value.exportedAtIso,
+
+    settings: {
+      segmentation:
+        parseSettingsGroup(
+          settings.segmentation,
+          DEFAULT_SEGMENTATION_SETTINGS,
+          'segmentation',
+        ),
+
+      trajectorySmoothing:
+        parseSettingsGroup(
+          settings
+            .trajectorySmoothing,
+          DEFAULT_TRAJECTORY_SETTINGS,
+          'trajectorySmoothing',
+        ),
+
+      trajectoryOutlier:
+        parseSettingsGroup(
+          settings
+            .trajectoryOutlier,
+          DEFAULT_TRAJECTORY_OUTLIER_SETTINGS,
+          'trajectoryOutlier',
+        ),
+
+      orientation:
+        parseSettingsGroup(
+          settings.orientation,
+          DEFAULT_ORIENTATION_SETTINGS,
+          'orientation',
+        ),
+
+      holeInvestigation:
+        parseSettingsGroup(
+          settings
+            .holeInvestigation,
+          DEFAULT_HOLE_INVESTIGATION_SETTINGS,
+          'holeInvestigation',
+        ),
+
+      escapeDetection:
+        parseSettingsGroup(
+          settings.escapeDetection,
+          DEFAULT_ESCAPE_DETECTION_SETTINGS,
+          'escapeDetection',
+        ),
+
+      searchStrategy:
+        parseSettingsGroup(
+          settings.searchStrategy,
+          DEFAULT_SEARCH_STRATEGY_SETTINGS,
+          'searchStrategy',
+        ),
+    },
+  };
 }
 
 type ProgressState = {
@@ -392,6 +822,66 @@ interface BatchOutlierQcSnapshot {
   rejectedPresentationIndices:
     number[];
 }
+type BatchTrackingFailureLocation =
+  | 'pre-trial'
+  | 'within-trial'
+  | 'post-trial'
+  | 'crosses-trial-boundary';
+
+interface BatchTrackingFailureRunSnapshot {
+  startPresentationIndex:
+    number;
+
+  endPresentationIndex:
+    number;
+
+  startPtsTicks:
+    number;
+
+  startPtsTimescale:
+    number;
+
+  endPtsTicks:
+    number;
+
+  endPtsTimescale:
+    number;
+
+  startTimeSeconds:
+    number;
+
+  endTimeSeconds:
+    number;
+
+  /*
+   * Exact first-missing to last-missing
+   * presentation timestamp span.
+   *
+   * Frame count is exported separately so
+   * a one-frame failure remains explicit
+   * even though its PTS span is zero.
+   */
+  ptsSpanSeconds:
+    number;
+
+  frameCount:
+    number;
+
+  trialLocation:
+    BatchTrackingFailureLocation;
+
+  overlapsAnalyzedTrial:
+    boolean;
+
+  trialOverlapFrameCount:
+    number;
+
+  automaticMissingFrameCount:
+    number;
+
+  manualMissingCorrectionCount:
+    number;
+}
 
 interface BatchEventReviewSummarySnapshot {
   automaticCount:
@@ -529,6 +1019,9 @@ interface BatchAnalysisSnapshot {
     tracking:
       BatchTrackingQcSnapshot |
       null;
+
+    trackingFailureRuns:
+  BatchTrackingFailureRunSnapshot[];
 
     orientation:
       BatchOrientationQcSnapshot |
@@ -817,10 +1310,77 @@ const ANALYSIS_PARAMETER_COLUMNS = [
   'strategy_min_serial_adjacent_transition_fraction',
   'strategy_min_serial_directional_consistency',
   'strategy_max_serial_direction_reversal_fraction',
-  'strategy_min_serial_perimeter_time_fraction',
-  'strategy_perimeter_radius_fraction',
-  'strategy_min_transitions_for_serial',
+'strategy_min_serial_perimeter_time_fraction',
+'strategy_perimeter_radius_fraction',
+'strategy_min_transitions_for_serial',
+
+'trial_start_minimum_presence_s',
+'target_quadrant_width_deg',
 ] as const;
+
+const TRACKING_QC_COLUMNS = [
+  'tool_version',
+  'snapshot_schema_version',
+  'file_name',
+
+  'failure_run_number_1based',
+
+  'start_presentation_index_0based',
+  'end_presentation_index_0based',
+
+  'start_pts_ticks',
+  'start_pts_timescale',
+  'end_pts_ticks',
+  'end_pts_timescale',
+
+  'start_s',
+  'end_s',
+  'pts_span_s',
+  'frame_count',
+
+  'trial_location',
+  'overlaps_analyzed_trial',
+  'trial_overlap_frame_count',
+
+  'automatic_missing_frames',
+  'manual_missing_corrections_in_run',
+
+  'trial_tracking_detection_fraction',
+  'whole_recording_missing_run_count',
+  'whole_recording_visible_frames',
+  'whole_recording_partial_detection_frames',
+  'manual_track_corrections',
+] as const;
+
+const ROI_COLUMNS = [
+  'tool_version',
+  'snapshot_schema_version',
+  'file_name',
+
+  'roi_type',
+
+  'roi_index_0based',
+  'roi_number_1based',
+
+  'position_provenance',
+
+  'automatic_center_x_px',
+  'automatic_center_y_px',
+
+  'analysis_center_x_px',
+  'analysis_center_y_px',
+
+  'center_adjustment_distance_px',
+
+  'radius_px',
+
+  'is_target',
+  'manually_adjusted',
+
+  'tracking_margin_px',
+  'platform_diameter_cm',
+] as const;
+
 function rationalSeconds(
   value:
     | {
@@ -841,6 +1401,254 @@ function rationalSeconds(
     value.ticks /
     value.timescale
   );
+}
+
+function buildTrackingFailureRuns(
+  track:
+    BodyTrack,
+
+  trialWindow:
+    ReturnType<
+      typeof detectTrialStart
+    >,
+
+  manualCorrections:
+    ManualTrackPointCorrectionMap,
+):
+  BatchTrackingFailureRunSnapshot[] {
+  if (
+    !trialWindow ||
+    track.points.length === 0
+  ) {
+    return [];
+  }
+
+  const runs:
+    BatchTrackingFailureRunSnapshot[] =
+    [];
+
+  const points =
+    track.points;
+
+  const trialStart =
+    trialWindow
+      .startPresentationIndex;
+
+  const trialEnd =
+    trialWindow
+      .endPresentationIndex ??
+    Number.POSITIVE_INFINITY;
+
+  let runStartArrayIndex:
+    number | null =
+    null;
+
+  function finishRun(
+    runEndArrayIndex:
+      number,
+  ) {
+    if (
+      runStartArrayIndex ===
+      null
+    ) {
+      return;
+    }
+
+    const first =
+      points[
+        runStartArrayIndex
+      ];
+
+    const last =
+      points[
+        runEndArrayIndex
+      ];
+
+    const startTimeSeconds =
+      timeToSeconds(
+        first.pts,
+      );
+
+    const endTimeSeconds =
+      timeToSeconds(
+        last.pts,
+      );
+
+    let trialLocation:
+      BatchTrackingFailureLocation;
+
+    if (
+      last.presentationIndex <
+      trialStart
+    ) {
+      trialLocation =
+        'pre-trial';
+    } else if (
+      first.presentationIndex >
+      trialEnd
+    ) {
+      trialLocation =
+        'post-trial';
+    } else if (
+      first.presentationIndex >=
+        trialStart &&
+      last.presentationIndex <=
+        trialEnd
+    ) {
+      trialLocation =
+        'within-trial';
+    } else {
+      trialLocation =
+        'crosses-trial-boundary';
+    }
+
+    let trialOverlapFrameCount =
+      0;
+
+    let manualMissingCorrectionCount =
+      0;
+
+    for (
+      let index =
+        runStartArrayIndex;
+      index <=
+        runEndArrayIndex;
+      index += 1
+    ) {
+      const point =
+        points[index];
+
+      if (
+        point.presentationIndex >=
+          trialStart &&
+        point.presentationIndex <=
+          trialEnd
+      ) {
+        trialOverlapFrameCount +=
+          1;
+      }
+
+      const correction =
+        manualCorrections[
+          String(
+            point
+              .presentationIndex,
+          )
+        ];
+
+      if (
+        correction?.kind ===
+        'missing'
+      ) {
+        manualMissingCorrectionCount +=
+          1;
+      }
+    }
+
+    const frameCount =
+      runEndArrayIndex -
+      runStartArrayIndex +
+      1;
+
+    runs.push({
+      startPresentationIndex:
+        first.presentationIndex,
+
+      endPresentationIndex:
+        last.presentationIndex,
+
+      startPtsTicks:
+        first.pts.ticks,
+
+      startPtsTimescale:
+        first.pts.timescale,
+
+      endPtsTicks:
+        last.pts.ticks,
+
+      endPtsTimescale:
+        last.pts.timescale,
+
+      startTimeSeconds,
+
+      endTimeSeconds,
+
+      ptsSpanSeconds:
+        Math.max(
+          0,
+          endTimeSeconds -
+            startTimeSeconds,
+        ),
+
+      frameCount,
+
+      trialLocation,
+
+      overlapsAnalyzedTrial:
+        trialOverlapFrameCount >
+        0,
+
+      trialOverlapFrameCount,
+
+      automaticMissingFrameCount:
+        Math.max(
+          0,
+          frameCount -
+            manualMissingCorrectionCount,
+        ),
+
+      manualMissingCorrectionCount,
+    });
+
+    runStartArrayIndex =
+      null;
+  }
+
+  for (
+    let index = 0;
+    index <
+      points.length;
+    index += 1
+  ) {
+    const point =
+      points[index];
+
+    const missing =
+      point.x === null ||
+      point.y === null;
+
+    if (missing) {
+      if (
+        runStartArrayIndex ===
+        null
+      ) {
+        runStartArrayIndex =
+          index;
+      }
+
+      continue;
+    }
+
+    if (
+      runStartArrayIndex !==
+      null
+    ) {
+      finishRun(
+        index - 1,
+      );
+    }
+  }
+
+  if (
+    runStartArrayIndex !==
+    null
+  ) {
+    finishRun(
+      points.length - 1,
+    );
+  }
+
+  return runs;
 }
 
 function buildTrialSummaryRows(
@@ -1947,14 +2755,334 @@ function buildAnalysisParameterRows(
         strategy
           .perimeterRadiusFraction,
 
-      strategy_min_transitions_for_serial:
-        strategy
-          .minimumTransitionsForSerial,
-    });
+strategy_min_transitions_for_serial:
+  strategy
+    .minimumTransitionsForSerial,
+
+/*
+ * Analysis definitions that currently
+ * remain fixed rather than user-configurable.
+ */
+trial_start_minimum_presence_s:
+  0.5,
+
+target_quadrant_width_deg:
+  90,
+});
   }
 
   return rows;
 }
+
+function buildTrackingQcRows(
+  batchItems:
+    BatchItem[],
+
+  snapshots:
+    Record<
+      string,
+      BatchAnalysisSnapshot
+    >,
+): CsvRow[] {
+  const rows:
+    CsvRow[] = [];
+
+  for (const item of batchItems) {
+    const snapshot =
+      snapshots[item.id];
+
+    if (!snapshot) {
+      continue;
+    }
+
+    const tracking =
+      snapshot.qc.tracking;
+
+    const failureRuns =
+      snapshot.qc
+        .trackingFailureRuns;
+
+    for (
+      let index = 0;
+      index <
+        failureRuns.length;
+      index += 1
+    ) {
+      const run =
+        failureRuns[index];
+
+      rows.push({
+        tool_version:
+          snapshot.toolVersion,
+
+        snapshot_schema_version:
+          snapshot.schemaVersion,
+
+        file_name:
+          snapshot
+            .fileIdentity
+            .name,
+
+        failure_run_number_1based:
+          index + 1,
+
+        start_presentation_index_0based:
+          run.startPresentationIndex,
+
+        end_presentation_index_0based:
+          run.endPresentationIndex,
+
+        start_pts_ticks:
+          run.startPtsTicks,
+
+        start_pts_timescale:
+          run.startPtsTimescale,
+
+        end_pts_ticks:
+          run.endPtsTicks,
+
+        end_pts_timescale:
+          run.endPtsTimescale,
+
+        start_s:
+          run.startTimeSeconds,
+
+        end_s:
+          run.endTimeSeconds,
+
+        pts_span_s:
+          run.ptsSpanSeconds,
+
+        frame_count:
+          run.frameCount,
+
+        trial_location:
+          run.trialLocation,
+
+        overlaps_analyzed_trial:
+          run.overlapsAnalyzedTrial,
+
+        trial_overlap_frame_count:
+          run.trialOverlapFrameCount,
+
+        automatic_missing_frames:
+          run.automaticMissingFrameCount,
+
+        manual_missing_corrections_in_run:
+          run.manualMissingCorrectionCount,
+
+        trial_tracking_detection_fraction:
+          snapshot.trial
+            .detectionRate,
+
+        whole_recording_missing_run_count:
+          tracking
+            ?.missingRuns
+            .length ??
+          null,
+
+        whole_recording_visible_frames:
+          tracking
+            ?.visibleFrames ??
+          null,
+
+        whole_recording_partial_detection_frames:
+          tracking
+            ?.partialFrames ??
+          null,
+
+        manual_track_corrections:
+          snapshot.qc
+            .manualTrackCorrectionCount,
+      });
+    }
+  }
+
+  return rows;
+}
+
+function buildRoiRows(
+  batchItems:
+    BatchItem[],
+
+  snapshots:
+    Record<
+      string,
+      BatchAnalysisSnapshot
+    >,
+): CsvRow[] {
+  const rows:
+    CsvRow[] = [];
+
+  for (const item of batchItems) {
+    const snapshot =
+      snapshots[item.id];
+
+    if (!snapshot) {
+      continue;
+    }
+
+    const arena =
+      snapshot
+        .calibration
+        .arena;
+
+    const geometry =
+      snapshot
+        .calibration
+        .holes;
+
+    /*
+     * Arena itself is also an ROI because
+     * tracking and physical scaling depend
+     * directly on this geometry.
+     */
+    if (arena) {
+      rows.push({
+        tool_version:
+          snapshot.toolVersion,
+
+        snapshot_schema_version:
+          snapshot.schemaVersion,
+
+        file_name:
+          snapshot
+            .fileIdentity
+            .name,
+
+        roi_type:
+          'arena',
+
+        roi_index_0based:
+          null,
+
+        roi_number_1based:
+          null,
+
+        position_provenance:
+          'arena-calibration',
+
+        automatic_center_x_px:
+          null,
+
+        automatic_center_y_px:
+          null,
+
+        analysis_center_x_px:
+          arena.centerX,
+
+        analysis_center_y_px:
+          arena.centerY,
+
+        center_adjustment_distance_px:
+          null,
+
+        radius_px:
+          arena
+            .platformRadiusPixels,
+
+        is_target:
+          null,
+
+        manually_adjusted:
+          null,
+
+        tracking_margin_px:
+          arena
+            .trackingMarginPixels,
+
+        platform_diameter_cm:
+          arena
+            .platformDiameterCm ??
+          null,
+      });
+    }
+
+    if (!geometry) {
+      continue;
+    }
+
+    for (
+      const hole of
+      geometry.holes
+    ) {
+      const dx =
+        hole.centerX -
+        hole.automaticCenterX;
+
+      const dy =
+        hole.centerY -
+        hole.automaticCenterY;
+
+      rows.push({
+        tool_version:
+          snapshot.toolVersion,
+
+        snapshot_schema_version:
+          snapshot.schemaVersion,
+
+        file_name:
+          snapshot
+            .fileIdentity
+            .name,
+
+        roi_type:
+          'hole',
+
+        roi_index_0based:
+          hole.index,
+
+        roi_number_1based:
+          hole.index + 1,
+
+        position_provenance:
+          hole.manuallyAdjusted
+            ? 'manual-adjusted'
+            : 'automatic',
+
+        automatic_center_x_px:
+          hole.automaticCenterX,
+
+        automatic_center_y_px:
+          hole.automaticCenterY,
+
+        analysis_center_x_px:
+          hole.centerX,
+
+        analysis_center_y_px:
+          hole.centerY,
+
+        center_adjustment_distance_px:
+          Math.hypot(
+            dx,
+            dy,
+          ),
+
+        radius_px:
+          hole.radiusPixels,
+
+        is_target:
+          hole.isTarget,
+
+        manually_adjusted:
+          hole.manuallyAdjusted,
+
+        tracking_margin_px:
+          arena
+            ?.trackingMarginPixels ??
+          null,
+
+        platform_diameter_cm:
+          arena
+            ?.platformDiameterCm ??
+          null,
+      });
+    }
+  }
+
+  return rows;
+}
+
 function csvCellText(
   value:
     CsvCell,
@@ -2113,11 +3241,74 @@ function downloadCsv(
     0,
   );
 }
+
+function downloadJsonFile(
+  filename:
+    string,
+
+  value:
+    unknown,
+) {
+  const content =
+    JSON.stringify(
+      value,
+      null,
+      2,
+    );
+
+  const blob =
+    new Blob(
+      [content],
+      {
+        type:
+          'application/json;charset=utf-8',
+      },
+    );
+
+  const url =
+    URL.createObjectURL(
+      blob,
+    );
+
+  const anchor =
+    document.createElement(
+      'a',
+    );
+
+  anchor.href =
+    url;
+
+  anchor.download =
+    filename;
+
+  anchor.style.display =
+    'none';
+
+  document.body.appendChild(
+    anchor,
+  );
+
+  anchor.click();
+
+  anchor.remove();
+
+  window.setTimeout(
+    () => {
+      URL.revokeObjectURL(
+        url,
+      );
+    },
+    0,
+  );
+}
+
 async function downloadAnalysisWorkbook(
   filename: string,
   trialRows: CsvRow[],
   eventRows: CsvRow[],
   parameterRows: CsvRow[],
+  trackingQcRows: CsvRow[],
+  roiRows: CsvRow[],
 ) {
   const {
     Workbook,
@@ -2140,21 +3331,24 @@ async function downloadAnalysisWorkbook(
   workbook.created =
     new Date();
 
-  function addDataSheet(
-    name: string,
-    columns: readonly string[],
-    rows: CsvRow[],
-  ) {
+function addDataSheet(
+  name: string,
+  columns: readonly string[],
+  rows: CsvRow[],
+  frozenColumns = 0,
+) {
     const worksheet =
       workbook.addWorksheet(
         name,
         {
-          views: [
-            {
-              state: 'frozen',
-              ySplit: 1,
-            },
-          ],
+         views: [
+  {
+    state: 'frozen',
+    ySplit: 1,
+    xSplit:
+      frozenColumns,
+  },
+],
         },
       );
 
@@ -2180,7 +3374,56 @@ async function downloadAnalysisWorkbook(
         row,
       );
     }
+    for (
+  let index = 0;
+  index < columns.length;
+  index += 1
+) {
+  const name =
+    columns[index];
 
+  const column =
+    worksheet.getColumn(
+      index + 1,
+    );
+
+  if (
+    name ===
+      'file_last_modified_ms' ||
+    name.endsWith(
+      '_index_0based',
+    ) ||
+    name.endsWith(
+      '_number_1based',
+    ) ||
+    name.endsWith(
+      '_frames',
+    ) ||
+    name.endsWith(
+      '_count',
+    )
+  ) {
+    column.numFmt =
+      '0';
+  }
+
+  if (
+    name === 'event_id' ||
+    name === 'provenance' ||
+    name === 'review_note' ||
+    name.includes(
+      'hole_sequence',
+    )
+  ) {
+    column.width =
+      28;
+
+    column.alignment = {
+      vertical: 'top',
+      wrapText: true,
+    };
+  }
+}
     worksheet.autoFilter = {
       from: {
         row: 1,
@@ -2269,24 +3512,40 @@ async function downloadAnalysisWorkbook(
     return worksheet;
   }
 
-  addDataSheet(
-    'Trial Summary',
-    TRIAL_SUMMARY_COLUMNS,
-    trialRows,
-  );
+addDataSheet(
+  'Trial Summary',
+  TRIAL_SUMMARY_COLUMNS,
+  trialRows,
+  3,
+);
 
-  addDataSheet(
-    'Investigation Events',
-    INVESTIGATION_EVENT_COLUMNS,
-    eventRows,
-  );
+addDataSheet(
+  'Investigation Events',
+  INVESTIGATION_EVENT_COLUMNS,
+  eventRows,
+  4,
+);
 
+addDataSheet(
+  'Analysis Parameters',
+  ANALYSIS_PARAMETER_COLUMNS,
+  parameterRows,
+  3,
+  
+);
   addDataSheet(
-    'Analysis Parameters',
-    ANALYSIS_PARAMETER_COLUMNS,
-    parameterRows,
-  );
+  'Tracking QC',
+  TRACKING_QC_COLUMNS,
+  trackingQcRows,
+  3,
+);
 
+addDataSheet(
+  'ROIs',
+  ROI_COLUMNS,
+  roiRows,
+  3,
+);
   const about =
     workbook.addWorksheet(
       'About',
@@ -2314,14 +3573,23 @@ async function downloadAnalysisWorkbook(
       'Trial Summary',
       'One row per captured trial.',
     ],
-    [
-      'Investigation Events',
-      'Automatic detections are retained even when rejected. Analysis fields describe the currently included reviewed event. Manual-added events have blank automatic-evidence fields.',
-    ],
+[
+  'Investigation Events',
+  'Automatic detections are retained even when rejected. Analysis fields describe the event currently included in downstream analysis. Unreviewed automatic events may be included provisionally. Manual-added events have blank automatic-evidence fields.',
+],
     [
       'Analysis Parameters',
       'Per-trial calibration and analysis thresholds captured with the result snapshot.',
     ],
+    [
+  'Tracking QC',
+  'One row per contiguous missing tracking run after manual track corrections. trial_location describes whether the failure occurred before, within, after, or across the effective analyzed trial boundary. pts_span_s is the exact first-missing to last-missing presentation timestamp span; frame_count should also be considered.',
+],
+
+[
+  'ROIs',
+  'One arena row plus one row per calibrated hole. Automatic and analysis hole centers are both retained so manual ROI adjustments remain auditable.',
+],
     [
       'Hole numbering',
       'Fields ending in _index_0based are internal zero-based indices. Fields ending in _number_1based are user-facing hole numbers.',
@@ -2371,14 +3639,26 @@ async function downloadAnalysisWorkbook(
    * byte array that is unambiguously safe as a
    * BlobPart.
    */
-  const buffer =
-    await workbook.xlsx
-      .writeBuffer();
+const buffer =
+  await workbook.xlsx
+    .writeBuffer();
 
-  const bytes =
-    Uint8Array.from(
-      buffer as ArrayLike<number>,
-    );
+/*
+ * ExcelJS types writeBuffer() as Buffer,
+ * while browser builds may return either a
+ * Uint8Array-compatible Buffer or ArrayBuffer.
+ *
+ * Normalize both forms into a browser-owned
+ * Uint8Array before constructing the Blob.
+ */
+const bytes =
+  buffer instanceof Uint8Array
+    ? new Uint8Array(
+        buffer,
+      )
+    : new Uint8Array(
+        buffer as unknown as ArrayBuffer,
+      );
 
   const blob =
     new Blob(
@@ -4267,6 +5547,243 @@ const [
 ] = useState<SearchStrategyOverride | null>(
   null,
 );
+/*
+ * A loaded settings preset becomes the
+ * starting configuration for new videos
+ * that do not already have a compatible
+ * saved per-video session.
+ *
+ * Saved per-video sessions still take
+ * precedence when reopened.
+ */
+const settingsPresetDefaultsRef =
+  useRef<
+    BarnesAnalysisSettingsBundle |
+    null
+  >(null);
+
+const [
+  settingsPresetNotice,
+  setSettingsPresetNotice,
+] =
+  useState<
+    string | null
+  >(null);
+
+const [
+  settingsPresetError,
+  setSettingsPresetError,
+] =
+  useState<
+    string | null
+  >(null);
+
+
+function currentAnalysisSettings():
+  BarnesAnalysisSettingsBundle {
+  return {
+    segmentation: {
+      ...segmentationSettings,
+    },
+
+    trajectorySmoothing: {
+      ...trajectorySmoothingSettings,
+    },
+
+    trajectoryOutlier: {
+      ...trajectoryOutlierSettings,
+    },
+
+    orientation: {
+      ...orientationSettings,
+    },
+
+    holeInvestigation: {
+      ...holeInvestigationSettings,
+    },
+
+    escapeDetection: {
+      ...escapeDetectionSettings,
+    },
+
+    searchStrategy: {
+      ...searchStrategySettings,
+    },
+  };
+}
+
+function applyAnalysisSettingsPreset(
+  settings:
+    BarnesAnalysisSettingsBundle,
+) {
+  const next =
+    cloneAnalysisSettingsBundle(
+      settings,
+    );
+
+  const segmentationChanged =
+    segmentationSettings
+      .differenceThreshold !==
+      next.segmentation
+        .differenceThreshold ||
+    segmentationSettings
+      .minimumComponentAreaPixels !==
+      next.segmentation
+        .minimumComponentAreaPixels;
+
+  /*
+   * Keep this preset as the starting point
+   * for subsequent unsaved videos in the
+   * current browser session.
+   */
+  settingsPresetDefaultsRef.current =
+    cloneAnalysisSettingsBundle(
+      next,
+    );
+
+  setSegmentationSettings({
+    ...next.segmentation,
+  });
+
+  setTrajectorySmoothingSettings({
+    ...next
+      .trajectorySmoothing,
+  });
+
+  setTrajectoryOutlierSettings({
+    ...next
+      .trajectoryOutlier,
+  });
+
+  setOrientationSettings({
+    ...next.orientation,
+  });
+
+  setHoleInvestigationSettings({
+    ...next
+      .holeInvestigation,
+  });
+
+  setEscapeDetectionSettings({
+    ...next
+      .escapeDetection,
+  });
+
+  setSearchStrategySettings({
+    ...next
+      .searchStrategy,
+  });
+
+  if (selectedFile) {
+    /*
+     * Any imported settings can change
+     * derived results, so do not retain a
+     * stale export snapshot.
+     */
+    clearBatchAnalysisSnapshot(
+      batchItemId(
+        selectedFile,
+      ),
+    );
+
+    /*
+     * Segmentation settings affect the
+     * actual tracker output. Downstream-only
+     * setting changes can reuse BodyTrack.
+     */
+    if (
+      segmentationChanged
+    ) {
+      setBodyTrack(
+        null,
+      );
+
+      setTrackingProgress(
+        null,
+      );
+    }
+  }
+}
+
+function handleDownloadSettingsPreset() {
+  const preset:
+    BarnesSettingsPresetFile = {
+    kind:
+      'barnes-maze-settings',
+
+    schemaVersion:
+      SETTINGS_PRESET_SCHEMA_VERSION,
+
+    toolVersion:
+      TOOL_VERSION,
+
+    exportedAtIso:
+      new Date()
+        .toISOString(),
+
+    settings:
+      currentAnalysisSettings(),
+  };
+
+  downloadJsonFile(
+    'barnes_maze_settings.json',
+    preset,
+  );
+
+  setSettingsPresetError(
+    null,
+  );
+
+  setSettingsPresetNotice(
+    'Settings preset downloaded.',
+  );
+}
+
+async function handleImportSettingsPreset(
+  file:
+    File,
+) {
+  setSettingsPresetError(
+    null,
+  );
+
+  try {
+    const preset =
+      parseSettingsPresetText(
+        await file.text(),
+      );
+
+    applyAnalysisSettingsPreset(
+      preset.settings,
+    );
+
+    setSettingsPresetNotice(
+      [
+        'Settings preset loaded.',
+        'It will be used for new videos without saved per-video settings.',
+        selectedFile
+          ? 'The currently open video was updated as well.'
+          : '',
+      ]
+        .filter(Boolean)
+        .join(' '),
+    );
+  } catch (cause) {
+    const message =
+      cause instanceof Error
+        ? cause.message
+        : String(cause);
+
+    setSettingsPresetError(
+      message,
+    );
+
+    setSettingsPresetNotice(
+      null,
+    );
+  }
+}
+
 useEffect(() => {
   if (
     !selectedFile ||
@@ -6000,6 +7517,14 @@ const activeBatchAnalysisSnapshot =
       qc: {
         tracking:
           trackQc,
+        trackingFailureRuns:
+  effectiveBodyTrack
+    ? buildTrackingFailureRuns(
+        effectiveBodyTrack,
+        trialWindow,
+        manualTrackPointCorrections,
+      )
+    : [],
 
         orientation:
           orientationQc,
@@ -6116,6 +7641,7 @@ const activeBatchAnalysisSnapshot =
     selectedFile,
     result,
     bodyTrack,
+    effectiveBodyTrack,
     trialWindow,
     automaticTrialWindow,
     trialStartOverride,
@@ -6229,6 +7755,32 @@ const analysisParameterRows =
       batchAnalysisSnapshots,
     ],
   );
+
+  const trackingQcRows =
+  useMemo(
+    () =>
+      buildTrackingQcRows(
+        batchItems,
+        batchAnalysisSnapshots,
+      ),
+    [
+      batchItems,
+      batchAnalysisSnapshots,
+    ],
+  );
+
+const roiRows =
+  useMemo(
+    () =>
+      buildRoiRows(
+        batchItems,
+        batchAnalysisSnapshots,
+      ),
+    [
+      batchItems,
+      batchAnalysisSnapshots,
+    ],
+  );
 const capturedTrialCount =
   trialSummaryRows.length;
 
@@ -6260,12 +7812,14 @@ async function handleDownloadXlsx() {
   setXlsxExportError(null);
 
   try {
-    await downloadAnalysisWorkbook(
-      'barnes_maze_analysis.xlsx',
-      trialSummaryRows,
-      investigationEventRows,
-      analysisParameterRows,
-    );
+await downloadAnalysisWorkbook(
+  'barnes_maze_analysis.xlsx',
+  trialSummaryRows,
+  investigationEventRows,
+  analysisParameterRows,
+  trackingQcRows,
+  roiRows,
+);
   } catch (cause) {
     const message =
       cause instanceof Error
@@ -6779,30 +8333,62 @@ async function handleFile(
    * Prevent settings from one unrelated video
    * leaking into another new video.
    */
+
+  const startingSettings =
+  settingsPresetDefaultsRef
+    .current;
   setSegmentationSettings({
-    ...DEFAULT_SEGMENTATION_SETTINGS,
-  });
+  ...(
+    startingSettings
+      ?.segmentation ??
+    DEFAULT_SEGMENTATION_SETTINGS
+  ),
+});
 
   setTrajectorySmoothingSettings({
-    ...DEFAULT_TRAJECTORY_SETTINGS,
-  });
+  ...(
+    startingSettings
+      ?.trajectorySmoothing ??
+    DEFAULT_TRAJECTORY_SETTINGS
+  ),
+});
 
 setTrajectoryOutlierSettings({
-  ...DEFAULT_TRAJECTORY_OUTLIER_SETTINGS,
+  ...(
+    startingSettings
+      ?.trajectoryOutlier ??
+    DEFAULT_TRAJECTORY_OUTLIER_SETTINGS
+  ),
 });
 
   setOrientationSettings({
-    ...DEFAULT_ORIENTATION_SETTINGS,
-  });
+  ...(
+    startingSettings
+      ?.orientation ??
+    DEFAULT_ORIENTATION_SETTINGS
+  ),
+});
 
-  setHoleInvestigationSettings({
-    ...DEFAULT_HOLE_INVESTIGATION_SETTINGS,
-  });
-  setEscapeDetectionSettings({
-  ...DEFAULT_ESCAPE_DETECTION_SETTINGS,
+setHoleInvestigationSettings({
+  ...(
+    startingSettings
+      ?.holeInvestigation ??
+    DEFAULT_HOLE_INVESTIGATION_SETTINGS
+  ),
+});
+setEscapeDetectionSettings({
+  ...(
+    startingSettings
+      ?.escapeDetection ??
+    DEFAULT_ESCAPE_DETECTION_SETTINGS
+  ),
 });
 setSearchStrategySettings({
-  ...DEFAULT_SEARCH_STRATEGY_SETTINGS,
+  ...(
+    startingSettings
+      ?.searchStrategy ??
+    DEFAULT_SEARCH_STRATEGY_SETTINGS
+  ),
 });
 
 setSearchStrategyOverride(
@@ -7402,7 +8988,117 @@ disabled={
             </button>
           )}
         </div>
+<section
+  aria-labelledby="settings-preset-heading"
 
+  style={{
+    marginTop:
+      '1rem',
+  }}
+>
+  <h2
+    id="settings-preset-heading"
+
+    style={{
+      fontSize:
+        '1rem',
+
+      margin:
+        '0 0 0.5rem',
+    }}
+  >
+    Analysis settings preset
+  </h2>
+
+  <p>
+    Save or reuse analysis thresholds across
+    videos. Settings presets do not contain
+    arena calibration, hole positions,
+    tracking results, or manual review.
+  </p>
+
+  <p>
+    Applying a different segmentation preset
+    requires mouse tracking to be recomputed.
+    Other threshold changes reuse the existing
+    track but may change downstream results
+    and review status.
+  </p>
+
+  <div className="actions">
+    <button
+      type="button"
+
+      disabled={
+        batchRunState.running ||
+        busy ||
+        trackingBusy
+      }
+
+      aria-label={
+        'Download reusable Barnes maze analysis settings JSON'
+      }
+
+      onClick={
+        handleDownloadSettingsPreset
+      }
+    >
+      Download settings JSON
+    </button>
+
+    <label className="file-button">
+      <span>
+        Import settings JSON
+      </span>
+
+      <input
+        type="file"
+
+        accept="application/json,.json"
+
+        disabled={
+          batchRunState.running ||
+          busy ||
+          trackingBusy
+        }
+
+        onChange={(
+          event:
+            ChangeEvent<HTMLInputElement>,
+        ) => {
+          const file =
+            event.currentTarget
+              .files?.[0];
+
+          if (file) {
+            void handleImportSettingsPreset(
+              file,
+            );
+          }
+
+          event.currentTarget.value =
+            '';
+        }}
+      />
+    </label>
+  </div>
+
+  {settingsPresetNotice && (
+    <p
+      role="status"
+      aria-live="polite"
+    >
+      {settingsPresetNotice}
+    </p>
+  )}
+
+  {settingsPresetError && (
+    <p role="alert">
+      Settings import failed:{' '}
+      {settingsPresetError}
+    </p>
+  )}
+</section>
         {batchRunState.running &&
  activeBatchRunItem && (
   <div
