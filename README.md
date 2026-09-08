@@ -1,7 +1,7 @@
 # Barnes Maze Analyzer
 
 **Live application:** https://dliarakos.github.io/Salk-AIRC-Take-Home-Maze-Analyzer/
-**Demo video:** [ADD DEMO VIDEO URL]  
+**Demo video:** (https://youtu.be/FkXiFdpx4SM)  
 **Take-home repository / sample videos:** https://github.com/salk-airc/rse-takehome-2026/
 
 Barnes Maze Analyzer is a browser-based research tool for analyzing mouse Barnes maze behavior from video. It performs local video decoding, arena and hole calibration, animal tracking, trajectory quality control, hole-investigation detection, frame-accurate manual review, behavioral metric calculation, visualization, and export.
