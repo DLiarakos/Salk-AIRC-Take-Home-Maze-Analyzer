@@ -1,14 +1,14 @@
 import type { FrameTiming, VideoMetadata } from '../models/media';
 import type { DecoderRequest, DecoderResponse } from './messages';
-import {
-  validateFrameTimings,
-  type TimingValidation,
-} from './timingValidation';
+import {validateFrameTimings,type TimingValidation,} from './timingValidation';
+import type {RepresentativeFrame,} from '../models/tracking';
 export interface DecodeResult {
   metadata: VideoMetadata;
   frames: FrameTiming[];
   decodedFrames: number;
   timingValidation: TimingValidation;
+  representativeFrames:
+    RepresentativeFrame[];
 }
 
 export function decoderCapabilities(): { webCodecs: boolean } {
@@ -28,7 +28,8 @@ export function decodeVideoFile(
 
   let metadata: VideoMetadata | null = null;
   const frames: FrameTiming[] = [];
-
+  const representativeFrames:
+  RepresentativeFrame[] = [];
   let rejectTask: ((reason?: unknown) => void) | null = null;
 
   const promise = new Promise<DecodeResult>((resolve, reject) => {
@@ -45,6 +46,11 @@ export function decodeVideoFile(
           break;
         case 'progress':
           onProgress?.(message);
+          break;
+        case 'representative-frame':
+          representativeFrames.push(
+            message.frame,
+          );
           break;
         case 'done':
           if (!metadata) {
@@ -68,11 +74,10 @@ export function decodeVideoFile(
               metadata.trackTimescale,
             );
             resolve({
-            metadata,
-            frames: presentationFrames,
-            decodedFrames: message.decodedFrames,
-            timingValidation,
-          });
+              metadata,frames: presentationFrames,decodedFrames:message.decodedFrames,
+              timingValidation,
+              representativeFrames,
+            });
           }
           worker.terminate();
           break;

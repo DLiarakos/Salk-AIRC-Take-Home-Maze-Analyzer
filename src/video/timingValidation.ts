@@ -24,7 +24,8 @@ export interface TimingValidation {
   timingCountMatches: boolean;
   ptsAreUnique: boolean;
 
-  valid: boolean;
+  decodeIntegrityValid: boolean;
+  timingRegular: boolean;
 }
 
 function median(values: number[]): number | null {
@@ -98,15 +99,21 @@ export function validateFrameTimings(
 
   const frameCountMatches =
     decodedFrameCount === expectedFrameCount;
-
   const timingCountMatches =
     frames.length === expectedFrameCount;
 
+  const decodeIntegrityValid =
+  frameCountMatches &&
+  timingCountMatches;
+
   const ptsAreUnique =
     uniquePts.size === frames.length;
-
+  const timingRegular =
+    ptsAreUnique &&
+    uniqueFrameIntervals.length === 1;
   const isConstantFrameRate =
     uniqueFrameIntervals.length === 1;
+
 
   return {
     expectedFrameCount,
@@ -139,10 +146,7 @@ export function validateFrameTimings(
     frameCountMatches,
     timingCountMatches,
     ptsAreUnique,
-
-    valid:
-      frameCountMatches &&
-      timingCountMatches &&
-      ptsAreUnique,
+    timingRegular,
+    decodeIntegrityValid,
   };
 }
