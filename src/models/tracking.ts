@@ -366,6 +366,182 @@ export interface HoleInvestigationEvent {
   closestNoseX: number;
   closestNoseY: number;
 }
+export type FinalHoleEventReviewStatus =
+  | 'unreviewed'
+  | 'confirmed';
+
+export type FinalHoleEventProvenance =
+  | 'automatic-unreviewed'
+  | 'automatic-manually-confirmed';
+
+export interface FinalReviewedHoleInvestigationEvent
+  extends HoleInvestigationEvent {
+
+  reviewStatus:
+    FinalHoleEventReviewStatus;
+
+  provenance:
+    FinalHoleEventProvenance;
+
+  reviewNote: string;
+
+  reviewedAtIso:
+    string | null;
+}
+export interface EscapeDetectionSettings {
+  minimumTerminalAbsenceSeconds: number;
+
+  /*
+   * How far backward from terminal disappearance
+   * to inspect reliable body/nose positions.
+   */
+  escapeLookbackSeconds: number;
+
+  /*
+   * Added to the calibrated physical hole radius
+   * for escape-specific spatial proximity.
+   */
+  escapeProximityMarginPixels: number;
+    /*
+   * Terminal segmentation may retain only part of the
+   * mouse while it enters the escape hole.
+   *
+   * Final body area below this fraction of the animal's
+   * normal tracked area is considered partial occlusion.
+   */
+  maximumTerminalBodyAreaFraction: number;
+
+  /*
+   * Low-area target-proximal evidence must persist for
+   * at least this long before becoming an escape candidate.
+   */
+  minimumTerminalCollapseSeconds: number;
+
+  /*
+   * Used for moderate evidence when a reviewed
+   * target investigation precedes disappearance.
+   */
+  maximumSecondsFromTargetEndToDisappearance:
+    number;
+
+  /*
+   * Used only for weak evidence when the video
+   * ends almost immediately after target contact.
+   */
+  maximumSecondsFromTargetEndToRecordingEnd:
+    number;
+}
+
+export type EscapeEvidenceStrength =
+  | 'strong'
+  | 'moderate'
+  | 'weak';
+
+export type EscapeCandidateKind =
+  | 'terminal-disappearance-at-target'
+  | 'terminal-body-collapse-at-target'
+  | 'target-associated-terminal-disappearance'
+  | 'target-near-recording-end';
+
+export interface EscapeCandidate {
+  candidateKey: string;
+
+  kind: EscapeCandidateKind;
+
+  evidenceStrength:
+    EscapeEvidenceStrength;
+
+  targetHoleIndex: number;
+
+  /*
+   * May be null because strong spatial evidence
+   * does not require an accepted investigation
+   * event immediately before escape.
+   */
+  targetEventIndex:
+    number | null;
+
+  targetEventStartTimeSeconds:
+    number | null;
+
+  targetEventEndTimeSeconds:
+    number | null;
+
+  /*
+   * Operational escape time.
+   *
+   * For terminal disappearance this is the first
+   * missing source observation.
+   *
+   * For weak end-of-recording evidence this is
+   * the associated target event end.
+   */
+  escapePresentationIndex: number;
+  escapeTimeSeconds: number;
+
+  /*
+   * For terminal disappearance these explicitly
+   * describe the interval containing the true
+   * transition from visible to absent.
+   */
+  lastDetectedPresentationIndex:
+    number | null;
+
+  lastDetectedTimeSeconds:
+    number | null;
+
+  firstMissingPresentationIndex:
+    number | null;
+
+  firstMissingTimeSeconds:
+    number | null;
+
+  recordingEndPresentationIndex: number;
+  recordingEndTimeSeconds: number;
+
+  terminalAbsenceSeconds: number;
+
+  secondsFromTargetEndToCandidate:
+    number | null;
+
+  /*
+   * Closest reliable positions to the target
+   * during the pre-disappearance lookback.
+   */
+  minimumNoseDistanceToTargetPixels:
+    number | null;
+
+  minimumBodyDistanceToTargetPixels:
+    number | null;
+    baselineBodyAreaPixels:
+    number | null;
+
+  terminalBodyAreaPixels:
+    number | null;
+
+  terminalBodyAreaFraction:
+    number | null;
+
+  terminalCollapseSeconds:
+    number;
+  escapeRadiusPixels: number;
+}
+export type EscapeReviewStatus =
+  | 'unreviewed'
+  | 'confirmed'
+  | 'rejected'
+  | 'ambiguous';
+
+export interface EscapeReviewDecision {
+  candidateKey: string;
+
+  status: EscapeReviewStatus;
+
+  note: string;
+
+  reviewedAtIso:
+    string | null;
+}
 
 export interface HoleInvestigationQc {
   trialObservationCount: number;
