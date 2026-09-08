@@ -853,6 +853,49 @@ export default function HoleEventReviewer(
       editedCount += 1;
     }
   }
+      const unreviewedCount = Math.max(
+      0,
+      result.events.length -
+      confirmedCount -
+      rejectedCount -
+      editedCount,
+    );
+
+    const reviewedCount =
+      confirmedCount +
+      rejectedCount +
+      editedCount;
+
+    const hasPreviousEvent = selectedEventIndex > 0;
+    const hasNextEvent =
+      selectedEventIndex < result.events.length - 1;
+
+    function selectAdjacentEvent(offset: -1 | 1) {
+      setSelectedEventIndex((current) =>
+        Math.max(
+          0,
+          Math.min(
+            result.events.length - 1,
+            current + offset,
+          ),
+        ));
+    }
+
+    function setDecisionAndAdvance(
+      status: 'confirmed' | 'rejected',
+    ) {
+      /*
+      * Save the decision for the currently active event
+      * before moving the reviewer to the next event.
+      */
+      setDecision(status);
+
+      if (hasNextEvent) {
+        selectAdjacentEvent(1);
+      }
+    }
+
+
   const duplicatePtsCount = selectedFrame
     ? (ptsCounts.get(exactPtsKey(selectedFrame)) ?? 1)
     : 0;
@@ -1080,194 +1123,221 @@ export default function HoleEventReviewer(
         </dd>
       </div>
     </dl>
-    {activeEvent ? (<>
-      <div className="actions">
-        <button type="button" disabled={selectedEventIndex === 0} onClick={() => setSelectedEventIndex(selectedEventIndex - 1)}>
-          Previous event
-        </button>
+{activeEvent ? (<>
+  <div className="event-review-toolbar">
+    <div>
+      <strong>
+        Event {selectedEventIndex + 1} / {result.events.length}
+      </strong>
 
-        <label>
-          <span>Event</span>
-
-          <select value={selectedEventIndex} onChange={(event) => setSelectedEventIndex(Number(event.target.value))}>
-            {result.events.map((event, index) => (<option key={holeEventReviewKey(event)} value={index}>
-              {`#${event.eventIndex + 1} · Hole ${event.holeIndex}`}
-
-              {event.isTarget
-                ? ' · TARGET'
-                : ''}
-
-              {` · ${event.startTimeSeconds.toFixed(3)} s`}
-            </option>))}
-          </select>
-        </label>
-
-        <button type="button" disabled={selectedEventIndex >=
-          result.events.length - 1} onClick={() => setSelectedEventIndex(selectedEventIndex + 1)}>
-          Next event
-        </button>
-      </div>
-
-      <dl className="metadata-grid">
-        <div>
-          <dt>Hole</dt>
-
-          <dd>
-            Hole {activeEvent.holeIndex}
-
-            {activeEvent.isTarget
-              ? ' · target'
-              : ''}
-          </dd>
-        </div>
-
-        <div>
-          <dt>Automatic interval</dt>
-
-          <dd>
-            {activeEvent
-              .startTimeSeconds
-              .toFixed(3)}
-            {' – '}
-            {activeEvent
-              .endTimeSeconds
-              .toFixed(3)}
-            {' s'}
-          </dd>
-        </div>
-
-        <div>
-          <dt>Review status</dt>
-
-          <dd>
-            {activeStatus}
-          </dd>
-        </div>
-      </dl>
-    </>) : (<p role="status">
-      No automatic investigation events were
-      detected. You may still browse the source
-      and add missed investigations manually.
-    </p>)}
-    <div style={{
-      width: '100%',
-      maxWidth: '900px',
-      marginTop: '1rem',
-    }}>
-
-
-      <canvas ref={overlayRef} aria-hidden="true" onPointerDown={(event) => {
-        if (!trackCorrectionClickMode ||
-          selectedPresentationIndex ===
-          null ||
-          exactFrameStatus !==
-          'ready') {
-          return;
-        }
-        event.preventDefault();
-        trackCorrectionDraggingRef.current =
-          true;
-        event.currentTarget
-          .setPointerCapture(event.pointerId);
-        setTrackCorrectionDraftFromPointer(event);
-      }} onPointerMove={(event) => {
-        if (!trackCorrectionClickMode ||
-          selectedPresentationIndex ===
-          null ||
-          exactFrameStatus !==
-          'ready') {
-          return;
-        }
-        event.preventDefault();
-        setTrackCorrectionDraftFromPointer(event);
-      }} onPointerUp={(event) => {
-        if (!trackCorrectionClickMode ||
-          selectedPresentationIndex ===
-          null ||
-          exactFrameStatus !==
-          'ready') {
-          return;
-        }
-        event.preventDefault();
-        setTrackCorrectionDraftFromPointer(event);
-        trackCorrectionDraggingRef.current =
-          false;
-        if (event.currentTarget
-          .hasPointerCapture(event.pointerId)) {
-          event.currentTarget
-            .releasePointerCapture(event.pointerId);
-        }
-      }} onPointerCancel={(event) => {
-        trackCorrectionDraggingRef.current =
-          false;
-        if (event.currentTarget
-          .hasPointerCapture(event.pointerId)) {
-          event.currentTarget
-            .releasePointerCapture(event.pointerId);
-        }
-      }} style={{
-        display: 'block',
-        width: '100%',
-        height: 'auto',
-        pointerEvents: trackCorrectionClickMode
-          ? 'auto'
-          : 'none',
-        cursor: trackCorrectionClickMode
-          ? 'crosshair'
-          : 'default',
-        touchAction: trackCorrectionClickMode
-          ? 'none'
-          : 'auto',
-      }} />
-      {exactFrameStatus ===
-        'opening' && (<p role="status">
-          Opening exact-frame source…
-        </p>)}
-
-      {exactFrameStatus ===
-        'loading' && (<p role="status">
-          Decoding selected exact source frame…
-        </p>)}
+      <span className="event-review-progress-text">
+        {reviewedCount} reviewed · {unreviewedCount} remaining
+      </span>
     </div>
-    <div className="actions">
+
+    <div className="event-review-event-nav">
       <button
         type="button"
-        disabled={selectedPresentationIndex ===
-          null || exactFrameStatus !== 'ready'}
-        aria-pressed={trackCorrectionClickMode}
-        onClick={() => setTrackCorrectionClickMode((current) => !current)}
+        disabled={!hasPreviousEvent}
+        onClick={() => selectAdjacentEvent(-1)}
       >
-        {trackCorrectionClickMode
-          ? 'Cancel centroid pick'
-          : 'Pick corrected centroid on video'}
+        ← Previous event
+      </button>
+
+      <label>
+        <span className="sr-only">
+          Selected investigation event
+        </span>
+
+        <select
+          value={selectedEventIndex}
+          onChange={(event) =>
+            setSelectedEventIndex(Number(event.target.value))
+          }
+        >
+          {result.events.map((event, index) => (
+            <option
+              key={holeEventReviewKey(event)}
+              value={index}
+            >
+              {`#${event.eventIndex + 1} · Hole ${event.holeIndex}`}
+              {event.isTarget ? ' · TARGET' : ''}
+              {` · ${event.startTimeSeconds.toFixed(3)} s`}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <button
+        type="button"
+        disabled={!hasNextEvent}
+        onClick={() => selectAdjacentEvent(1)}
+      >
+        Next event →
       </button>
     </div>
-    <div className="actions">
-      <button type="button" onClick={() => selectFrame(checkpoints.pre)}>
+  </div>
+</>) : (<p role="status">
+  No automatic investigation events were detected.
+  You may still browse the source and add missed
+  investigations manually.
+</p>)}
+
+<div className="event-review-workspace">
+  <div className="event-review-video-panel">
+    <div className="event-review-canvas-wrap">
+      <canvas
+        ref={overlayRef}
+        aria-label="Exact source frame with Barnes maze review overlays"
+        onPointerDown={(event) => {
+          if (
+            !trackCorrectionClickMode ||
+            selectedPresentationIndex === null ||
+            exactFrameStatus !== 'ready'
+          ) {
+            return;
+          }
+
+          event.preventDefault();
+          trackCorrectionDraggingRef.current = true;
+          event.currentTarget.setPointerCapture(event.pointerId);
+          setTrackCorrectionDraftFromPointer(event);
+        }}
+        onPointerMove={(event) => {
+          if (
+            !trackCorrectionClickMode ||
+            selectedPresentationIndex === null ||
+            exactFrameStatus !== 'ready'
+          ) {
+            return;
+          }
+
+          event.preventDefault();
+          setTrackCorrectionDraftFromPointer(event);
+        }}
+        onPointerUp={(event) => {
+          if (
+            !trackCorrectionClickMode ||
+            selectedPresentationIndex === null ||
+            exactFrameStatus !== 'ready'
+          ) {
+            return;
+          }
+
+          event.preventDefault();
+          setTrackCorrectionDraftFromPointer(event);
+          trackCorrectionDraggingRef.current = false;
+
+          if (
+            event.currentTarget.hasPointerCapture(
+              event.pointerId,
+            )
+          ) {
+            event.currentTarget.releasePointerCapture(
+              event.pointerId,
+            );
+          }
+        }}
+        onPointerCancel={(event) => {
+          trackCorrectionDraggingRef.current = false;
+
+          if (
+            event.currentTarget.hasPointerCapture(
+              event.pointerId,
+            )
+          ) {
+            event.currentTarget.releasePointerCapture(
+              event.pointerId,
+            );
+          }
+        }}
+        style={{
+          display: 'block',
+          width: '100%',
+          height: 'auto',
+          pointerEvents: trackCorrectionClickMode
+            ? 'auto'
+            : 'none',
+          cursor: trackCorrectionClickMode
+            ? 'crosshair'
+            : 'default',
+          touchAction: trackCorrectionClickMode
+            ? 'none'
+            : 'auto',
+        }}
+      />
+
+      {exactFrameStatus === 'opening' && (
+        <p role="status">
+          Opening exact-frame source…
+        </p>
+      )}
+
+      {exactFrameStatus === 'loading' && (
+        <p role="status">
+          Decoding selected exact source frame…
+        </p>
+      )}
+
+      {exactFrameStatus === 'error' && (
+        <p role="alert">
+          Exact source frame could not be decoded.{' '}
+          {exactFrameError ?? 'Unknown decoder error.'}
+        </p>
+      )}
+    </div>
+
+    <div className="event-review-checkpoints">
+      <button
+        type="button"
+        disabled={!checkpoints.pre}
+        onClick={() => selectFrame(checkpoints.pre)}
+      >
         Pre-event
       </button>
 
-      <button type="button" onClick={() => selectFrame(checkpoints.onset)}>
+      <button
+        type="button"
+        disabled={!checkpoints.onset}
+        onClick={() => selectFrame(checkpoints.onset)}
+      >
         Onset
       </button>
 
-      <button type="button" onClick={() => selectFrame(checkpoints.closest)}>
+      <button
+        type="button"
+        disabled={!checkpoints.closest}
+        onClick={() => selectFrame(checkpoints.closest)}
+      >
         Closest
       </button>
 
-      <button type="button" onClick={() => selectFrame(checkpoints.end)}>
+      <button
+        type="button"
+        disabled={!checkpoints.end}
+        onClick={() => selectFrame(checkpoints.end)}
+      >
         End
       </button>
 
-      <button type="button" onClick={() => selectFrame(checkpoints.post)}>
+      <button
+        type="button"
+        disabled={!checkpoints.post}
+        onClick={() => selectFrame(checkpoints.post)}
+      >
         Post-event
       </button>
     </div>
 
-    <div className="actions">
-      <button type="button" disabled={currentReviewFrameIndex <= 0} onClick={() => selectReviewFrame(currentReviewFrameIndex -
-        1)}>
-        Previous frame
+    <div className="event-review-frame-nav">
+      <button
+        type="button"
+        disabled={currentReviewFrameIndex <= 0}
+        onClick={() =>
+          selectReviewFrame(currentReviewFrameIndex - 1)
+        }
+      >
+        ← Frame
       </button>
 
       <input
@@ -1276,17 +1346,248 @@ export default function HoleEventReviewer(
         min="0"
         max={Math.max(0, reviewFrames.length - 1)}
         value={Math.max(0, currentReviewFrameIndex)}
-        onChange={(event) => selectReviewFrame(Number(event.target.value))}
+        onChange={(event) =>
+          selectReviewFrame(Number(event.target.value))
+        }
       />
 
-      <button type="button" disabled={currentReviewFrameIndex < 0 ||
-        currentReviewFrameIndex >=
-        reviewFrames.length - 1} onClick={() => selectReviewFrame(currentReviewFrameIndex +
-          1)}>
-        Next frame
+      <button
+        type="button"
+        disabled={
+          currentReviewFrameIndex < 0 ||
+          currentReviewFrameIndex >=
+            reviewFrames.length - 1
+        }
+        onClick={() =>
+          selectReviewFrame(currentReviewFrameIndex + 1)
+        }
+      >
+        Frame →
       </button>
     </div>
 
+    <div className="event-review-frame-summary">
+      <span>
+        <strong>Current frame:</strong>{' '}
+        {selectedFrame
+          ? frameSeconds(selectedFrame).toFixed(3)
+          : 'Unavailable'}{' '}
+        s
+      </span>
+
+      <span>
+        <strong>Presentation index:</strong>{' '}
+        {selectedFrame?.presentationIndex ?? 'Unavailable'}
+      </span>
+
+      <button
+        type="button"
+        disabled={
+          selectedPresentationIndex === null ||
+          exactFrameStatus !== 'ready'
+        }
+        aria-pressed={trackCorrectionClickMode}
+        onClick={() => {
+          trackCorrectionDraggingRef.current = false;
+          setTrackCorrectionClickMode(
+            (current) => !current,
+          );
+        }}
+      >
+        {trackCorrectionClickMode
+          ? 'Cancel centroid correction'
+          : 'Correct centroid'}
+      </button>
+    </div>
+  </div>
+
+  <aside
+    className="event-review-sidebar"
+    aria-label="Active investigation decision"
+  >
+    {activeEvent ? (<>
+      <div className="event-review-sidebar-heading">
+        <span className="event-review-event-number">
+          Event {selectedEventIndex + 1}
+        </span>
+
+        <span
+          className={`event-review-status event-review-status-${activeStatus}`}
+        >
+          {activeStatus}
+        </span>
+      </div>
+
+      <h4>
+        Hole {effectiveHoleIndex}
+        {activeEvent.isTarget ? ' · TARGET' : ''}
+      </h4>
+
+      <dl className="event-review-sidebar-metrics">
+        <div>
+          <dt>Automatic interval</dt>
+          <dd>
+            {activeEvent.startTimeSeconds.toFixed(3)}
+            {' – '}
+            {activeEvent.endTimeSeconds.toFixed(3)} s
+          </dd>
+        </div>
+
+        <div>
+          <dt>Duration</dt>
+          <dd>
+            {activeEvent.durationSeconds.toFixed(3)} s
+          </dd>
+        </div>
+
+        <div>
+          <dt>Closest nose distance</dt>
+          <dd>
+            {activeEvent.minimumNoseDistancePixels.toFixed(2)} px
+          </dd>
+        </div>
+      </dl>
+
+      <div className="event-review-decision-actions">
+        <button
+          type="button"
+          className="event-review-confirm"
+          aria-pressed={activeStatus === 'confirmed'}
+          onClick={() =>
+            setDecisionAndAdvance('confirmed')
+          }
+        >
+          ✓ {hasNextEvent
+            ? 'Confirm & next'
+            : 'Confirm event'}
+        </button>
+
+        <button
+          type="button"
+          className="event-review-reject"
+          aria-pressed={activeStatus === 'rejected'}
+          onClick={() =>
+            setDecisionAndAdvance('rejected')
+          }
+        >
+          ✕ {hasNextEvent
+            ? 'Reject & next'
+            : 'Reject event'}
+        </button>
+      </div>
+
+      <div className="event-review-secondary-actions">
+        <button
+          type="button"
+          aria-pressed={activeStatus === 'confirmed'}
+          onClick={() => setDecision('confirmed')}
+        >
+          Confirm only
+        </button>
+
+        <button
+          type="button"
+          aria-pressed={activeStatus === 'rejected'}
+          onClick={() => setDecision('rejected')}
+        >
+          Reject only
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setDecision('unreviewed')}
+        >
+          Reset
+        </button>
+      </div>
+
+      <div className="event-review-evidence">
+        <h5>Current-frame evidence</h5>
+
+        <dl>
+          <div>
+            <dt>State</dt>
+            <dd>
+              {selectedEvidence?.state ??
+                'No unique evidence'}
+            </dd>
+          </div>
+
+          <div>
+            <dt>Nose distance</dt>
+            <dd>
+              {selectedEvidence?.distancePixels !== null &&
+              selectedEvidence?.distancePixels !== undefined
+                ? `${selectedEvidence.distancePixels.toFixed(2)} px`
+                : 'Unavailable'}
+            </dd>
+          </div>
+
+          <div>
+            <dt>Head-hole alignment</dt>
+            <dd>
+              {selectedEvidence?.headHoleAlignment !== null &&
+              selectedEvidence?.headHoleAlignment !== undefined
+                ? selectedEvidence.headHoleAlignment.toFixed(3)
+                : 'Unavailable'}
+            </dd>
+          </div>
+
+          <div>
+            <dt>Inside trigger</dt>
+            <dd>
+              {selectedEvidence
+                ? selectedEvidence.withinEntryRadius
+                  ? 'Yes'
+                  : 'No'
+                : 'Unavailable'}
+            </dd>
+          </div>
+        </dl>
+      </div>
+
+      <label className="event-review-note">
+        <span>Review note</span>
+
+        <textarea
+          rows={3}
+          value={activeNote}
+          onChange={(event) =>
+            setNote(event.target.value)
+          }
+          placeholder="Optional reason for this decision"
+        />
+      </label>
+
+      <div className="event-review-sidebar-nav">
+        <button
+          type="button"
+          disabled={!hasPreviousEvent}
+          onClick={() => selectAdjacentEvent(-1)}
+        >
+          ← Previous
+        </button>
+
+        <button
+          type="button"
+          disabled={!hasNextEvent}
+          onClick={() => selectAdjacentEvent(1)}
+        >
+          Next →
+        </button>
+      </div>
+    </>) : (
+      <p>
+        No automatic event is selected.
+      </p>
+    )}
+  </aside>
+</div>
+
+<details className="event-review-technical-details">
+  <summary>
+    Technical frame diagnostics
+  </summary>
     <dl className="metadata-grid">
       <div>
         <dt>Presentation index</dt>
@@ -1458,6 +1759,7 @@ export default function HoleEventReviewer(
         </dd>
       </div>
     </dl>
+</details>
 
     {duplicatePtsCount > 1 && (<p role="status">
       {duplicatePtsCount} source frames share this exact
@@ -1474,122 +1776,122 @@ export default function HoleEventReviewer(
         {exactFrameError ??
           'Unknown decoder error.'}
       </p>)}
-    {activeEvent && (<fieldset>
-      <legend>
-        Manual event decision
-      </legend>
-      <div style={{
-        display: 'grid',
-        gap: '0.75rem',
-        marginBottom: '1rem',
-      }}>
-        <label>
-          <span>
-            Reviewed hole
-          </span>
+{activeEvent && (<fieldset>
+  <legend>
+    Event boundary / hole correction
+  </legend>
 
-          <select value={effectiveHoleIndex} onChange={(event) => applyEventEdit({
+  <p>
+    Use these controls only when the automatic event
+    identifies the correct investigation but its hole
+    assignment or temporal boundaries require correction.
+  </p>
+
+  <div
+    style={{
+      display: 'grid',
+      gap: '0.75rem',
+    }}
+  >
+    <label>
+      <span>
+        Reviewed hole
+      </span>
+
+      <select
+        value={effectiveHoleIndex}
+        onChange={(event) =>
+          applyEventEdit({
             manualHoleIndex: Number(event.target.value),
-          })}>
-            {geometry.holes.map((hole) => (<option key={hole.index} value={hole.index}>
-              {`Hole ${hole.index}${hole.isTarget
-                ? ' · TARGET'
-                : ''}`}
-            </option>))}
-          </select>
-        </label>
+          })
+        }
+      >
+        {geometry.holes.map((hole) => (
+          <option
+            key={hole.index}
+            value={hole.index}
+          >
+            {`Hole ${hole.index}${hole.isTarget
+              ? ' · TARGET'
+              : ''}`}
+          </option>
+        ))}
+      </select>
+    </label>
 
-        <dl className="metadata-grid">
-          <div>
-            <dt>
-              Reviewed start
-            </dt>
+    <dl className="metadata-grid">
+      <div>
+        <dt>
+          Reviewed start
+        </dt>
 
-            <dd>
-              {effectiveStartFrame
-                ? (`${frameSeconds(effectiveStartFrame).toFixed(6)} s · ` +
-                  `index ${effectiveStartPresentationIndex}`)
-                : 'Unavailable'}
-            </dd>
-          </div>
-
-          <div>
-            <dt>
-              Reviewed end
-            </dt>
-
-            <dd>
-              {effectiveEndFrame
-                ? (`${frameSeconds(effectiveEndFrame).toFixed(6)} s · ` +
-                  `index ${effectiveEndPresentationIndex}`)
-                : 'Unavailable'}
-            </dd>
-          </div>
-        </dl>
-
-        <div className="actions">
-          <button type="button" disabled={selectedPresentationIndex ===
-            null ||
-            selectedPresentationIndex >
-            effectiveEndPresentationIndex} onClick={() => {
-              if (selectedPresentationIndex ===
-                null) {
-                return;
-              }
-              applyEventEdit({
-                manualStartPresentationIndex: selectedPresentationIndex,
-              });
-            }}>
-            Set start to current frame
-          </button>
-
-          <button type="button" disabled={selectedPresentationIndex ===
-            null ||
-            selectedPresentationIndex <
-            effectiveStartPresentationIndex} onClick={() => {
-              if (selectedPresentationIndex ===
-                null) {
-                return;
-              }
-              applyEventEdit({
-                manualEndPresentationIndex: selectedPresentationIndex,
-              });
-            }}>
-            Set end to current frame
-          </button>
-        </div>
-      </div>
-      <div className="actions">
-        <button type="button" aria-pressed={activeStatus ===
-          'confirmed'} onClick={() => setDecision('confirmed')}>
-          Confirm event
-        </button>
-
-        <button type="button" aria-pressed={activeStatus ===
-          'rejected'} onClick={() => setDecision('rejected')}>
-          Reject event
-        </button>
-
-        <button type="button" onClick={() => setDecision('unreviewed')}>
-          Reset to automatic
-        </button>
+        <dd>
+          {effectiveStartFrame
+            ? (`${frameSeconds(effectiveStartFrame).toFixed(6)} s · ` +
+              `index ${effectiveStartPresentationIndex}`)
+            : 'Unavailable'}
+        </dd>
       </div>
 
-      <label style={{
-        display: 'grid',
-        gap: '0.4rem',
-        marginTop: '0.75rem',
-      }}>
-        <span>Review note</span>
+      <div>
+        <dt>
+          Reviewed end
+        </dt>
 
-        <textarea
-          rows={3}
-          value={activeNote}
-          onChange={(event) => setNote(event.target.value)}
-          placeholder="Optional reason for this manual decision"
-        />
-      </label>
-    </fieldset>)}
+        <dd>
+          {effectiveEndFrame
+            ? (`${frameSeconds(effectiveEndFrame).toFixed(6)} s · ` +
+              `index ${effectiveEndPresentationIndex}`)
+            : 'Unavailable'}
+        </dd>
+      </div>
+    </dl>
+
+    <div className="actions">
+      <button
+        type="button"
+        disabled={
+          selectedPresentationIndex === null ||
+          selectedPresentationIndex >
+            effectiveEndPresentationIndex
+        }
+        onClick={() => {
+          if (selectedPresentationIndex === null) {
+            return;
+          }
+
+          applyEventEdit({
+            manualStartPresentationIndex:
+              selectedPresentationIndex,
+          });
+        }}
+      >
+        Set start to current frame
+      </button>
+
+      <button
+        type="button"
+        disabled={
+          selectedPresentationIndex === null ||
+          selectedPresentationIndex <
+            effectiveStartPresentationIndex
+        }
+        onClick={() => {
+          if (selectedPresentationIndex === null) {
+            return;
+          }
+
+          applyEventEdit({
+            manualEndPresentationIndex:
+              selectedPresentationIndex,
+          });
+        }}
+      >
+        Set end to current frame
+      </button>
+    </div>
+  </div>
+</fieldset>)}
 
     <fieldset style={{
       marginTop: '1rem',
