@@ -223,6 +223,38 @@ export interface BodyTrack {
   detectedFrameCount: number;
   missingFrameCount: number;
 }
+
+export type ManualTrackPointCorrection =
+  | {
+      presentationIndex: number;
+
+      kind: 'position';
+
+      x: number;
+      y: number;
+
+      note: string;
+
+      updatedAtIso: string;
+    }
+  | {
+      presentationIndex: number;
+
+      kind: 'missing';
+
+      x: null;
+      y: null;
+
+      note: string;
+
+      updatedAtIso: string;
+    };
+
+export type ManualTrackPointCorrectionMap =
+  Record<
+    string,
+    ManualTrackPointCorrection
+  >;
 export interface TrialWindowSettings {
   /**
    * Mouse must remain detected for at least this
@@ -241,10 +273,24 @@ export interface TrialWindow {
   endPts:
     RationalTime | null;
 }
+export interface TrialStartOverride {
+  presentationIndex: number;
+
+  note: string;
+
+  updatedAtIso: string;
+}
 export interface TrajectorySmoothingSettings {
   medianWindowSeconds: number;
   meanWindowSeconds: number;
   maxGapSeconds: number;
+}
+
+export interface TrajectoryOutlierSettings {
+  enabled: boolean;
+
+  maximumJumpSpeedPixelsPerSecond:
+    number;
 }
 
 export interface AnalysisTrajectoryPoint {
@@ -368,14 +414,76 @@ export interface HoleInvestigationEvent {
 }
 export type FinalHoleEventReviewStatus =
   | 'unreviewed'
-  | 'confirmed';
+  | 'confirmed'
+  | 'edited'
+  | 'manual-added';
 
 export type FinalHoleEventProvenance =
   | 'automatic-unreviewed'
-  | 'automatic-manually-confirmed';
+  | 'automatic-manually-confirmed'
+  | 'automatic-manually-edited'
+  | 'manual-added';
+export interface ManualHoleEventAddition {
+  id: string;
 
-export interface FinalReviewedHoleInvestigationEvent
-  extends HoleInvestigationEvent {
+  /*
+   * Stable creation order within this video session.
+   */
+  ordinal: number;
+
+  holeIndex: number;
+
+  startPresentationIndex: number;
+  endPresentationIndex: number;
+
+  note: string;
+
+  createdAtIso: string;
+  updatedAtIso: string;
+}
+export interface FinalReviewedHoleInvestigationEvent {
+  /*
+   * Automatic events retain their original
+   * automatic event index.
+   *
+   * Manual events receive a stable synthetic
+   * index when the final set is constructed.
+   */
+  eventIndex: number;
+
+  automaticEventIndex:
+    number | null;
+
+  manualEventId:
+    string | null;
+
+  finalEventKey: string;
+
+  holeIndex: number;
+  isTarget: boolean;
+
+  startPresentationIndex: number;
+  endPresentationIndex: number;
+
+  startTimeSeconds: number;
+  endTimeSeconds: number;
+  durationSeconds: number;
+
+  /*
+   * These exist only for events originating
+   * from the automatic detector.
+   */
+  positiveObservationCount:
+    number | null;
+
+  minimumNoseDistancePixels:
+    number | null;
+
+  closestNoseX:
+    number | null;
+
+  closestNoseY:
+    number | null;
 
   reviewStatus:
     FinalHoleEventReviewStatus;

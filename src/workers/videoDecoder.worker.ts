@@ -66,10 +66,148 @@ interface Mp4Sample {
   data: Uint8Array;
 }
 
+interface OpenReviewFileRequest {
+  type:
+    'open-review-file';
+
+  file: File;
+}
+
+interface DecodeReviewFrameRequest {
+  type:
+    'decode-review-frame';
+
+  requestId:
+    number;
+
+  targetPresentationIndex:
+    number;
+
+  targetSampleIndex:
+    number;
+}
+
+type ExtendedDecoderRequest =
+  | DecoderRequest
+  | OpenReviewFileRequest
+  | DecodeReviewFrameRequest;
+
+interface ReviewFileReadyResponse {
+  type:
+    'review-file-ready';
+
+  sampleCount:
+    number;
+
+  width:
+    number;
+
+  height:
+    number;
+}
+
+interface ReviewFrameResponse {
+  type:
+    'review-frame';
+
+  requestId:
+    number;
+
+  presentationIndex:
+    number;
+
+  sampleIndex:
+    number;
+
+  pts:
+    RationalTime;
+
+  width:
+    number;
+
+  height:
+    number;
+
+  bitmap:
+    ImageBitmap;
+}
+
+interface ReviewErrorResponse {
+  type:
+    'review-error';
+
+  requestId:
+    number | null;
+
+  message:
+    string;
+}
+
+type ExtendedDecoderResponse =
+  | DecoderResponse
+  | ReviewFileReadyResponse
+  | ReviewFrameResponse
+  | ReviewErrorResponse;
+
+interface CachedReviewSample {
+  sampleIndex:
+    number;
+
+  pts:
+    RationalTime;
+
+  duration:
+    RationalTime;
+
+  /*
+   * Original source PTS converted to
+   * WebCodecs units. Retained only as
+   * source timing metadata.
+   */
+  timestampUs:
+    number;
+
+  /*
+   * Unique review-decoder identity.
+   *
+   * This is deliberately NOT scientific
+   * time. It prevents duplicate source PTS
+   * from collapsing onto the same
+   * WebCodecs timestamp.
+   */
+  decoderTimestampUs:
+    number;
+
+  isKeyFrame:
+    boolean;
+
+  data:
+    Uint8Array;
+}
+
 let cancelled = false;
 
+let reviewSamples:
+  CachedReviewSample[] = [];
+
+let reviewDecoderConfig:
+  VideoDecoderConfig |
+  null = null;
+
+let reviewWidth =
+  0;
+
+let reviewHeight =
+  0;
+
+let latestReviewRequestId =
+  0;
+
+let reviewDecodeChain =
+  Promise.resolve();
+
 function post(
-  message: DecoderResponse,
+  message: ExtendedDecoderResponse,
   transfer: Transferable[] = [],
 ): void {
   ctx.postMessage(
@@ -235,6 +373,698 @@ function evenlySpacedIndices(
   return [
     ...indices,
   ];
+}
+
+async function openReviewFile(
+  file: File,
+): Promise<void> {
+  cancelled =
+    false;
+
+  reviewSamples =
+    [];
+
+  reviewDecoderConfig =
+    null;
+
+  reviewWidth =
+    0;
+
+  reviewHeight =
+    0;
+
+  latestReviewRequestId =
+    0;
+
+  const mp4File =
+    (MP4Box as any)
+      .createFile(
+        true,
+      );
+
+  let videoTrack:
+    Mp4VideoTrack |
+    null = null;
+
+  let nextSampleIndex =
+    0;
+
+  let extractionComplete =
+    false;
+
+  let demuxReadyResolve!:
+    (
+      track:
+        Mp4VideoTrack,
+    ) => void;
+
+  let demuxReadyReject!:
+    (
+      reason:
+        unknown,
+    ) => void;
+
+  const demuxReady =
+    new Promise<
+      Mp4VideoTrack
+    >(
+      (
+        resolve,
+        reject,
+      ) => {
+        demuxReadyResolve =
+          resolve;
+
+        demuxReadyReject =
+          reject;
+      },
+    );
+
+  let extractionDoneResolve!:
+    () => void;
+
+  let extractionDoneReject!:
+    (
+      reason:
+        unknown,
+    ) => void;
+
+  const extractionDone =
+    new Promise<void>(
+      (
+        resolve,
+        reject,
+      ) => {
+        extractionDoneResolve =
+          resolve;
+
+        extractionDoneReject =
+          reject;
+      },
+    );
+
+  mp4File.onError =
+    (
+      error:
+        unknown,
+    ) => {
+      demuxReadyReject(
+        error,
+      );
+
+      extractionDoneReject(
+        error,
+      );
+    };
+
+  mp4File.onReady =
+    async (
+      info:
+        Mp4Info,
+    ) => {
+      try {
+        const track =
+          info.videoTracks?.[0];
+
+        if (!track) {
+          throw new Error(
+            'No video track found for exact-frame review.',
+          );
+        }
+
+        if (
+          !track.codec.startsWith(
+            'avc1',
+          ) &&
+          !track.codec.startsWith(
+            'avc3',
+          )
+        ) {
+          throw new Error(
+            `Exact-frame review currently supports H.264/AVC MP4 only; found ${track.codec}.`,
+          );
+        }
+
+        const config:
+          VideoDecoderConfig = {
+            codec:
+              track.codec,
+
+            codedWidth:
+              track.video.width,
+
+            codedHeight:
+              track.video.height,
+
+            description:
+              getCodecDescription(
+                mp4File,
+                track.id,
+              ),
+          };
+
+        const support =
+          await VideoDecoder
+            .isConfigSupported(
+              config,
+            );
+
+        if (
+          !support.supported
+        ) {
+          throw new Error(
+            `Browser cannot decode exact review frames for ${track.codec}.`,
+          );
+        }
+
+        videoTrack =
+          track;
+
+        reviewDecoderConfig =
+          support.config ??
+          config;
+
+        reviewWidth =
+          track.video.width;
+
+        reviewHeight =
+          track.video.height;
+
+        mp4File
+          .setExtractionOptions(
+            track.id,
+            null,
+            {
+              nbSamples:
+                EXTRACTION_BATCH_SAMPLES,
+
+              rapAlignement:
+                false,
+            },
+          );
+
+        mp4File.start();
+
+        demuxReadyResolve(
+          track,
+        );
+      } catch (error) {
+        demuxReadyReject(
+          error,
+        );
+
+        extractionDoneReject(
+          error,
+        );
+      }
+    };
+
+  mp4File.onSamples =
+    (
+      trackId:
+        number,
+
+      _user:
+        unknown,
+
+      samples:
+        Mp4Sample[],
+    ) => {
+      if (!videoTrack) {
+        extractionDoneReject(
+          new Error(
+            'Exact-review samples arrived before track initialization.',
+          ),
+        );
+
+        return;
+      }
+
+      for (
+        const sample of
+        samples
+      ) {
+        const pts =
+          asRational(
+            sample.cts,
+            sample.timescale,
+          );
+
+        const duration =
+          asRational(
+            sample.duration,
+            sample.timescale,
+          );
+
+       const sampleIndex =
+  nextSampleIndex++;
+
+reviewSamples.push({
+  sampleIndex,
+
+  pts,
+
+  duration,
+
+  timestampUs:
+    timeToWebCodecsMicroseconds(
+      pts,
+    ),
+
+  /*
+   * One unique microsecond identity per
+   * encoded MP4 sample.
+   *
+   * Do not interpret this as source time.
+   */
+  decoderTimestampUs:
+    sampleIndex,
+
+  isKeyFrame:
+    mp4SampleIsKey(
+      sample,
+    ),
+
+  /*
+   * Own one compressed copy so
+   * MP4Box buffers can be released.
+   */
+  data:
+    sample.data.slice(),
+});
+      }
+      const last =
+        samples.at(-1);
+
+      const deliveredAll =
+        reviewSamples.length >=
+        videoTrack.nb_samples;
+
+      const deliveredFinalSample =
+        last?.number !==
+          undefined &&
+        last.number + 1 >=
+          videoTrack
+            .nb_samples;
+
+      if (
+        !extractionComplete &&
+        (
+          deliveredAll ||
+          deliveredFinalSample
+        )
+      ) {
+        extractionComplete =
+          true;
+
+        extractionDoneResolve();
+      }
+
+      if (
+        last?.number !==
+        undefined
+      ) {
+        mp4File
+          .releaseUsedSamples(
+            trackId,
+            last.number + 1,
+          );
+      }
+    };
+
+  /*
+   * Read the local source once.
+   *
+   * Subsequent requested review frames use
+   * the cached compressed samples.
+   */
+  let offset =
+    0;
+
+  while (
+    offset <
+    file.size
+  ) {
+    if (cancelled) {
+      return;
+    }
+
+    const end =
+      Math.min(
+        offset +
+          FILE_CHUNK_BYTES,
+        file.size,
+      );
+
+    const buffer =
+      (
+        await file
+          .slice(
+            offset,
+            end,
+          )
+          .arrayBuffer()
+      ) as Mp4ArrayBuffer;
+
+    buffer.fileStart =
+      offset;
+
+    mp4File.appendBuffer(
+      buffer,
+    );
+
+    offset =
+      end;
+  }
+
+  const readyTrack =
+    await demuxReady;
+
+  mp4File.flush();
+
+  await extractionDone;
+
+  if (
+    reviewSamples.length !==
+    readyTrack.nb_samples
+  ) {
+    throw new Error(
+      `Exact-review cache contains ${reviewSamples.length} samples; expected ${readyTrack.nb_samples}.`,
+    );
+  }
+
+  post({
+    type:
+      'review-file-ready',
+
+    sampleCount:
+      reviewSamples.length,
+
+    width:
+      reviewWidth,
+
+    height:
+      reviewHeight,
+  });
+}
+
+async function decodeReviewFrame(
+  request:
+    DecodeReviewFrameRequest,
+): Promise<void> {
+  if (
+    !reviewDecoderConfig ||
+    reviewSamples.length ===
+      0
+  ) {
+    throw new Error(
+      'Exact-frame review file has not finished opening.',
+    );
+  }
+
+  const target =
+    reviewSamples[
+      request
+        .targetSampleIndex
+    ];
+
+  if (!target) {
+    throw new Error(
+      `Exact review sample ${request.targetSampleIndex} does not exist.`,
+    );
+  }
+
+  /*
+   * Begin decoding at the nearest preceding
+   * random-access sample in DECODE order.
+   */
+  let startSampleIndex =
+    request
+      .targetSampleIndex;
+
+  while (
+    startSampleIndex >
+      0 &&
+    !reviewSamples[
+      startSampleIndex
+    ].isKeyFrame
+  ) {
+    startSampleIndex -=
+      1;
+  }
+
+  if (
+    !reviewSamples[
+      startSampleIndex
+    ].isKeyFrame
+  ) {
+    throw new Error(
+      `No preceding H.264 key frame found for sample ${request.targetSampleIndex}.`,
+    );
+  }
+
+const pendingByDecoderTimestamp =
+  new Map<
+    number,
+    CachedReviewSample
+  >();
+
+let resolveBitmap!:
+  (
+    bitmap:
+      ImageBitmap,
+  ) => void;
+
+let rejectBitmap!:
+  (
+    reason:
+      unknown,
+  ) => void;
+
+const bitmapPromise =
+  new Promise<ImageBitmap>(
+    (
+      resolve,
+      reject,
+    ) => {
+      resolveBitmap =
+        resolve;
+
+      rejectBitmap =
+        reject;
+    },
+  );
+
+let decoderFailure:
+  unknown = null;
+
+  const decoder =
+    new VideoDecoder({
+      output:
+        (
+          frame:
+            VideoFrame,
+        ) => {
+         const source =
+  pendingByDecoderTimestamp.get(
+    frame.timestamp,
+  );
+
+if (source) {
+  pendingByDecoderTimestamp.delete(
+    frame.timestamp,
+  );
+}
+
+if (!source) {
+            frame.close();
+
+            decoderFailure =
+              new Error(
+                `Exact-review decoded timestamp ${frame.timestamp} µs had no matching submitted source sample.`,
+              );
+
+            return;
+          }
+
+         if (
+  source.sampleIndex ===
+  request
+    .targetSampleIndex
+) {
+  /*
+   * Convert the exact requested decoded
+   * VideoFrame into a transferable bitmap.
+   *
+   * Keep the VideoFrame open until
+   * createImageBitmap() has finished.
+   */
+  createImageBitmap(
+    frame,
+  )
+    .then(
+      (
+        bitmap,
+      ) => {
+        resolveBitmap(
+          bitmap,
+        );
+      },
+      (
+        error,
+      ) => {
+        rejectBitmap(
+          error,
+        );
+      },
+    )
+    .finally(
+      () => {
+        frame.close();
+      },
+    );
+
+  return;
+}
+
+          frame.close();
+        },
+
+      error:
+  (
+    error,
+  ) => {
+    decoderFailure =
+      error;
+
+    rejectBitmap(
+      error,
+    );
+  },
+    });
+
+  decoder.configure(
+    reviewDecoderConfig,
+  );
+
+  for (
+    let sampleIndex =
+      startSampleIndex;
+    sampleIndex <=
+      request
+        .targetSampleIndex;
+    sampleIndex += 1
+  ) {
+    const sample =
+      reviewSamples[
+        sampleIndex
+      ];
+
+ pendingByDecoderTimestamp.set(
+  sample.decoderTimestampUs,
+  sample,
+);
+
+decoder.decode(
+  new EncodedVideoChunk({
+    type:
+      sample.isKeyFrame
+        ? 'key'
+        : 'delta',
+
+    /*
+     * Review-only identity timestamp.
+     *
+     * Exact scientific PTS remains in
+     * sample.pts and is never replaced by
+     * this value.
+     */
+    timestamp:
+      sample.decoderTimestampUs,
+
+        duration:
+          timeToWebCodecsMicroseconds(
+            sample.duration,
+          ),
+
+        data:
+          sample.data,
+      }),
+    );
+  }
+
+  await withTimeout(
+  decoder.flush(),
+  10_000,
+  'Exact-frame VideoDecoder.flush()',
+);
+
+if (decoderFailure) {
+  decoder.close();
+
+  throw decoderFailure;
+}
+
+/*
+ * flush() guarantees that WebCodecs has
+ * emitted all frames it can from the
+ * submitted chunk sequence.
+ *
+ * The separate timeout also prevents a
+ * missing target frame from leaving the
+ * reviewer waiting indefinitely.
+ */
+const bitmap =
+  await withTimeout(
+    bitmapPromise,
+    10_000,
+    `Exact review sample ${request.targetSampleIndex}`,
+  );
+
+decoder.close();
+  /*
+   * If the user already selected another
+   * source frame, do not send a stale image.
+   */
+  if (
+    request.requestId !==
+    latestReviewRequestId
+  ) {
+    bitmap.close();
+
+    return;
+  }
+
+  post(
+    {
+      type:
+        'review-frame',
+
+      requestId:
+        request.requestId,
+
+      presentationIndex:
+        request
+          .targetPresentationIndex,
+
+      sampleIndex:
+        target.sampleIndex,
+
+      pts:
+        target.pts,
+
+      width:
+        reviewWidth,
+
+      height:
+        reviewHeight,
+
+      bitmap,
+    },
+    [
+      bitmap,
+    ],
+  );
 }
 
 async function decodeFile(file: File): Promise<void> {
@@ -971,18 +1801,32 @@ async function trackFile(
   let extractionComplete =
     false;
 
-  const trackPoints:
-    BodyTrackPoint[] = [];
+const trackPoints:
+  BodyTrackPoint[] = [];
 
-  /*
-   * WebCodecs gets integer-microsecond
-   * timestamps, but exact PTS remains here.
-   */
-  const pendingTimingByTimestamp =
-    new Map<
-      number,
-      FrameTiming[]
-    >();
+/*
+ * BodyTrackPoint does not itself retain the
+ * MP4 sample index. Keep that identity here
+ * until final presentation ordering is assigned.
+ */
+const trackPointSampleIndex =
+  new Map<
+    BodyTrackPoint,
+    number
+  >();
+
+/*
+ * WebCodecs receives a unique synthetic
+ * timestamp for tracking-frame identity.
+ *
+ * Exact scientific timing remains in
+ * FrameTiming.pts.
+ */
+const pendingTimingByDecoderTimestamp =
+  new Map<
+    number,
+    FrameTiming
+  >();
 
   /*
    * Processing is deliberately serialized.
@@ -1044,27 +1888,21 @@ async function trackFile(
    * Decoder output is already presentation
    * ordered by WebCodecs.
    */
-  const decoderOutput = (
-    frame: VideoFrame,
-  ) => {
-    const queue =
-      pendingTimingByTimestamp.get(
-        frame.timestamp,
-      );
+const decoderOutput = (
+  frame: VideoFrame,
+) => {
+  const timing =
+    pendingTimingByDecoderTimestamp.get(
+      frame.timestamp,
+    );
 
-    const timing =
-      queue?.shift();
+  if (timing) {
+    pendingTimingByDecoderTimestamp.delete(
+      frame.timestamp,
+    );
+  }
 
-    if (
-      queue &&
-      queue.length === 0
-    ) {
-      pendingTimingByTimestamp.delete(
-        frame.timestamp,
-      );
-    }
-
-    if (!timing) {
+  if (!timing) {
       frame.close();
 
       trackingFailure =
@@ -1075,11 +1913,16 @@ async function trackFile(
       return;
     }
 
-    const presentationIndex =
-      decodedFrames;
+    /*
+ * This is only a temporary value needed by
+ * trackBodyFrame(). Final presentation index
+ * is assigned after exact PTS ordering below.
+ */
+const provisionalPresentationIndex =
+  timing.sampleIndex;
 
-    decodedFrames += 1;
-    pendingTrackingFrames += 1;
+decodedFrames += 1;
+pendingTrackingFrames += 1;
 
     /*
      * Extend the serialized tracking chain.
@@ -1104,12 +1947,15 @@ async function trackFile(
                 trackBodyFrame(
                   grayscale.pixels,
                   timing,
-                  presentationIndex,
+                  provisionalPresentationIndex,
                   background,
                   arenaMask,
                   settings,
                 );
-
+                trackPointSampleIndex.set(
+                  point,
+                  timing.sampleIndex,
+                );
               trackPoints.push(
                 point,
               );
@@ -1430,55 +2276,57 @@ async function trackFile(
                   sample.timescale,
                 );
 
-              const timestampUs =
-                timeToWebCodecsMicroseconds(
-                  pts,
-                );
+const sampleIndex =
+  nextSampleIndex++;
 
-              const timing:
-                FrameTiming = {
-                  sampleIndex:
-                    nextSampleIndex++,
+/*
+ * Unique identity supplied to this tracking
+ * VideoDecoder only.
+ *
+ * This is not scientific time.
+ */
+const decoderTimestampUs =
+  sampleIndex;
 
-                  presentationIndex:
-                    null,
+const timing:
+  FrameTiming = {
+  sampleIndex,
 
-                  pts,
-                  dts,
-                  duration,
+  presentationIndex:
+    null,
 
-                  webCodecsTimestampUs:
-                    timestampUs,
+  pts,
+  dts,
+  duration,
 
-                  isKeyFrame:
-                    mp4SampleIsKey(
-                      sample,
-                    ),
-                };
+  /*
+   * For this decoder invocation, this is the
+   * timestamp actually supplied to WebCodecs.
+   * Exact source PTS remains separately in pts.
+   */
+  webCodecsTimestampUs:
+    decoderTimestampUs,
 
-              const timestampQueue =
-                pendingTimingByTimestamp.get(
-                  timestampUs,
-                ) ?? [];
+  isKeyFrame:
+    mp4SampleIsKey(
+      sample,
+    ),
+};
 
-              timestampQueue.push(
-                timing,
-              );
+pendingTimingByDecoderTimestamp.set(
+  decoderTimestampUs,
+  timing,
+);
 
-              pendingTimingByTimestamp.set(
-                timestampUs,
-                timestampQueue,
-              );
+decoder.decode(
+  new EncodedVideoChunk({
+    type:
+      timing.isKeyFrame
+        ? 'key'
+        : 'delta',
 
-              decoder.decode(
-                new EncodedVideoChunk({
-                  type:
-                    timing.isKeyFrame
-                      ? 'key'
-                      : 'delta',
-
-                  timestamp:
-                    timestampUs,
+    timestamp:
+      decoderTimestampUs,
 
                   duration:
                     timeToWebCodecsMicroseconds(
@@ -1619,25 +2467,77 @@ async function trackFile(
   }
 
   if (
-    pendingTimingByTimestamp.size >
-    0
-  ) {
-    throw new Error(
-      `${pendingTimingByTimestamp.size} tracking timestamps were not matched to decoded frames.`,
-    );
-  }
+  pendingTimingByDecoderTimestamp.size >
+  0
+) {
+  throw new Error(
+    `${pendingTimingByDecoderTimestamp.size} tracking sample identities were not matched to decoded frames.`,
+  );
+}
 
   /*
    * Defensive ordering.
    */
-  trackPoints.sort(
-    (
-      a,
-      b,
-    ) =>
-      a.presentationIndex -
-      b.presentationIndex,
-  );
+  /*
+ * Assign the same deterministic presentation
+ * order used by decodeVideoFile():
+ *
+ *   1. exact MP4 PTS
+ *   2. MP4 sample index as tie-breaker
+ *
+ * This makes duplicate-PTS source frames map
+ * to the same presentation indices everywhere
+ * in the application.
+ */
+trackPoints.sort(
+  (
+    a,
+    b,
+  ) => {
+    const timeDifference =
+      (
+        a.pts.ticks /
+        a.pts.timescale
+      ) -
+      (
+        b.pts.ticks /
+        b.pts.timescale
+      );
+
+    if (
+      timeDifference !== 0
+    ) {
+      return timeDifference;
+    }
+
+    return (
+      (
+        trackPointSampleIndex.get(
+          a,
+        ) ??
+        Number.POSITIVE_INFINITY
+      ) -
+      (
+        trackPointSampleIndex.get(
+          b,
+        ) ??
+        Number.POSITIVE_INFINITY
+      )
+    );
+  },
+);
+
+for (
+  let presentationIndex = 0;
+  presentationIndex <
+    trackPoints.length;
+  presentationIndex += 1
+) {
+  trackPoints[
+    presentationIndex
+  ].presentationIndex =
+    presentationIndex;
+}
 
   const detectedFrameCount =
     trackPoints.filter(
@@ -1689,7 +2589,7 @@ ctx.addEventListener(
   'message',
   (
     event:
-      MessageEvent<DecoderRequest>,
+      MessageEvent<ExtendedDecoderRequest>,
   ) => {
     const message =
       event.data;
@@ -1700,6 +2600,87 @@ ctx.addEventListener(
       cancelled = true;
       return;
     }
+    if (
+  message.type ===
+  'open-review-file'
+) {
+  openReviewFile(
+    message.file,
+  ).catch(
+    (
+      error:
+        unknown,
+    ) => {
+      post({
+        type:
+          'review-error',
+
+        requestId:
+          null,
+
+        message:
+          error instanceof
+          Error
+            ? error.message
+            : String(
+                error,
+              ),
+      });
+    },
+  );
+
+  return;
+}
+
+if (
+  message.type ===
+  'decode-review-frame'
+) {
+  latestReviewRequestId =
+    message.requestId;
+
+  reviewDecodeChain =
+    reviewDecodeChain
+      .then(
+        () =>
+          decodeReviewFrame(
+            message,
+          ),
+      )
+      .catch(
+        (
+          error:
+            unknown,
+        ) => {
+          /*
+           * Only surface an error if this
+           * request is still current.
+           */
+          if (
+            message.requestId ===
+            latestReviewRequestId
+          ) {
+            post({
+              type:
+                'review-error',
+
+              requestId:
+                message.requestId,
+
+              message:
+                error instanceof
+                Error
+                  ? error.message
+                  : String(
+                      error,
+                    ),
+            });
+          }
+        },
+      );
+
+  return;
+}
 
     if (
       message.type ===
