@@ -200,3 +200,21 @@ export interface BodyTrack {
   detectedFrameCount: number;
   missingFrameCount: number;
 }
+export interface TrialWindowSettings {
+  /**
+   * Mouse must remain detected for at least this
+   * long before presence is considered real.
+   */
+  minimumPresenceSeconds: number;
+}
+
+export interface TrialWindow {
+  startPresentationIndex: number;
+  startPts: RationalTime;
+
+  endPresentationIndex:
+    number | null;
+
+  endPts:
+    RationalTime | null;
+}

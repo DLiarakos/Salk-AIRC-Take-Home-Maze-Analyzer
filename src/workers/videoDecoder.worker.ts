@@ -1688,43 +1688,74 @@ async function trackFile(
       bodyTrack,
   });
 }
-ctx.addEventListener('message', (event: MessageEvent<DecoderRequest>) => {
-  const message = event.data;
+ctx.addEventListener(
+  'message',
+  (
+    event:
+      MessageEvent<DecoderRequest>,
+  ) => {
+    const message =
+      event.data;
 
-  if (message.type === 'cancel') {
-    cancelled = true;
-    return;
-  }
+    if (
+      message.type === 'cancel'
+    ) {
+      cancelled = true;
+      return;
+    }
 
-  if (message.type === 'decode-file') {
-    decodeFile(message.file).catch((error: unknown) => {
-      post({
-        type: 'error',
-        message: 'Could not decode video.',
-        detail: error instanceof Error ? error.message : String(error),
-      });
-    });
-  }
-  if (message.type ==='track-file') { trackFile(message,).catch((error: unknown,) => {
-      post({
-        type: 'error',
+    if (
+      message.type ===
+      'decode-file'
+    ) {
+      decodeFile(
+        message.file,
+      ).catch(
+        (
+          error: unknown,
+        ) => {
+          post({
+            type: 'error',
 
-        message:
-          'Could not track mouse.',
+            message:
+              'Could not decode video.',
 
-        detail:
-          error instanceof Error
-            ? error.message
-            : String(error),
-      });
-    },
-  );
+            detail:
+              error instanceof Error
+                ? error.message
+                : String(error),
+          });
+        },
+      );
 
-  return;
-}
-});
+      return;
+    }
 
-post({
-  type: 'capabilities',
-  webCodecs: typeof VideoDecoder !== 'undefined' && typeof VideoFrame !== 'undefined',
-});
+    if (
+      message.type ===
+      'track-file'
+    ) {
+      trackFile(
+        message,
+      ).catch(
+        (
+          error: unknown,
+        ) => {
+          post({
+            type: 'error',
+
+            message:
+              'Could not track mouse.',
+
+            detail:
+              error instanceof Error
+                ? error.message
+                : String(error),
+          });
+        },
+      );
+
+      return;
+    }
+  },
+);
