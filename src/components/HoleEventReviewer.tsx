@@ -1083,38 +1083,29 @@ export default function HoleEventReviewer(
       confirmed, rejected, or unreviewed.
     </p>
 
-    <dl className="metadata-grid">
-      <div>
-        <dt>Automatic events</dt>
-        <dd>
-          {result.events.length}
-        </dd>
-      </div>
+<dl className="event-review-summary-grid">
+  <div>
+    <dt>Automatic events</dt>
+    <dd>{result.events.length}</dd>
+  </div>
 
-      <div>
-        <dt>Confirmed</dt>
-        <dd>
-          {confirmedCount}
-        </dd>
-      </div>
+  <div>
+    <dt>Confirmed</dt>
+    <dd>{confirmedCount}</dd>
+  </div>
 
-      <div>
-        <dt>Rejected</dt>
-        <dd>
-          {rejectedCount}
-        </dd>
-      </div>
-      <div>
-        <dt>
-          Edited
-        </dt>
+  <div>
+    <dt>Rejected</dt>
+    <dd>{rejectedCount}</dd>
+  </div>
 
-        <dd>
-          {editedCount}
-        </dd>
-      </div>
-      <div>
-        <dt>Unreviewed</dt>
+  <div>
+    <dt>Edited</dt>
+    <dd>{editedCount}</dd>
+  </div>
+
+  <div>
+    <dt>Unreviewed</dt>
         <dd>
           {result.events.length -
             confirmedCount -
@@ -1584,11 +1575,761 @@ export default function HoleEventReviewer(
   </aside>
 </div>
 
+<fieldset
+  className="event-review-missed-event"
+  style={{ marginTop: '1rem' }}
+>
+  <legend>
+    Add missed investigation
+  </legend>
+
+  <p>
+    Browse anywhere in the analyzed trial,
+    mark the first and last frame of an
+    investigation missed by the automatic
+    detector, then assign the reviewed hole.
+  </p>
+
+  {firstSourcePresentationIndex !== null &&
+    lastSourcePresentationIndex !== null && (<>
+      <label
+        style={{
+          display: 'grid',
+          gap: '0.4rem',
+        }}
+      >
+        <span>
+          Browse source frames
+        </span>
+
+        <input
+          type="range"
+          min={firstSourcePresentationIndex ?? 0}
+          max={lastSourcePresentationIndex ?? 0}
+          step="1"
+          value={
+            selectedPresentationIndex ??
+            firstSourcePresentationIndex ??
+            0
+          }
+          onChange={(event) =>
+            setSelectedPresentationIndex(
+              Number(event.target.value),
+            )
+          }
+        />
+      </label>
+
+      <p>
+        Current frame:{' '}
+        <strong>
+          {selectedPresentationIndex ??
+            firstSourcePresentationIndex}
+        </strong>
+      </p>
+    </>)}
+
+  <label>
+    <span>
+      Manual event hole
+    </span>
+
+    <select
+      value={manualDraftHoleIndex}
+      onChange={(event) =>
+        setManualDraftHoleIndex(
+          Number(event.target.value),
+        )
+      }
+    >
+      {geometry.holes.map((hole) => (
+        <option
+          key={hole.index}
+          value={hole.index}
+        >
+          {`Hole ${hole.index}${hole.isTarget
+            ? ' · TARGET'
+            : ''}`}
+        </option>
+      ))}
+    </select>
+  </label>
+
+  <div
+    className="actions"
+    style={{
+      marginTop: '0.75rem',
+    }}
+  >
+    <button
+      type="button"
+      disabled={selectedPresentationIndex === null}
+      onClick={() => {
+        if (selectedPresentationIndex === null) {
+          return;
+        }
+
+        setManualDraftStartPresentationIndex(
+          selectedPresentationIndex,
+        );
+      }}
+    >
+      Set manual start
+    </button>
+
+    <button
+      type="button"
+      disabled={selectedPresentationIndex === null}
+      onClick={() => {
+        if (selectedPresentationIndex === null) {
+          return;
+        }
+
+        setManualDraftEndPresentationIndex(
+          selectedPresentationIndex,
+        );
+      }}
+    >
+      Set manual end
+    </button>
+  </div>
+
+  <dl className="track-correction-summary">
+    <div>
+      <dt>
+        Manual start
+      </dt>
+
+      <dd>
+        {manualDraftStartPresentationIndex !== null
+          ? (`${frameSeconds(
+            frameByIndex.get(
+              manualDraftStartPresentationIndex,
+            )!,
+          ).toFixed(6)} s · index ${manualDraftStartPresentationIndex}`)
+          : 'Not set'}
+      </dd>
+    </div>
+
+    <div>
+      <dt>
+        Manual end
+      </dt>
+
+      <dd>
+        {manualDraftEndPresentationIndex !== null
+          ? (`${frameSeconds(
+            frameByIndex.get(
+              manualDraftEndPresentationIndex,
+            )!,
+          ).toFixed(6)} s · index ${manualDraftEndPresentationIndex}`)
+          : 'Not set'}
+      </dd>
+    </div>
+  </dl>
+
+  {manualDraftStartPresentationIndex !== null &&
+    manualDraftEndPresentationIndex !== null &&
+    manualDraftStartPresentationIndex >
+      manualDraftEndPresentationIndex && (
+      <p role="alert">
+        Manual event start must occur
+        before or at the manual event end.
+      </p>
+    )}
+
+  {manualDraftOutsideTrial && (
+    <p role="alert">
+      A manually added investigation must
+      fall within the currently reviewed
+      trial window.
+    </p>
+  )}
+
+  <label
+    style={{
+      display: 'grid',
+      gap: '0.4rem',
+      marginTop: '0.75rem',
+    }}
+  >
+    <span>
+      Manual event note
+    </span>
+
+    <textarea
+      rows={3}
+      value={manualDraftNote}
+      placeholder="Optional reason this event was added manually"
+      onChange={(event) =>
+        setManualDraftNote(event.target.value)
+      }
+    />
+  </label>
+
+  <div
+    className="actions"
+    style={{
+      marginTop: '0.75rem',
+    }}
+  >
+    <button
+      type="button"
+      disabled={
+        manualDraftStartPresentationIndex === null ||
+        manualDraftEndPresentationIndex === null ||
+        manualDraftStartPresentationIndex >
+          manualDraftEndPresentationIndex ||
+        manualDraftOutsideTrial
+      }
+      onClick={addManualInvestigation}
+    >
+      Add manual investigation
+    </button>
+
+    <button
+      type="button"
+      onClick={() => {
+        setManualDraftStartPresentationIndex(null);
+        setManualDraftEndPresentationIndex(null);
+        setManualDraftNote('');
+      }}
+    >
+      Clear manual draft
+    </button>
+  </div>
+</fieldset>
+
+<details className="event-review-advanced-corrections">
+  <summary>
+    <span>
+      Advanced corrections
+    </span>
+
+    <span className="event-review-advanced-status">
+      {activeStatus === 'edited' && (
+        <span>Event edited</span>
+      )}
+
+      {trialStartOverride && (
+        <span>Trial start overridden</span>
+      )}
+
+      {selectedTrackCorrection && (
+        <span>
+          {selectedTrackCorrection.kind === 'position'
+            ? 'Track corrected'
+            : 'Track marked missing'}
+        </span>
+      )}
+    </span>
+  </summary>
+
+  <div className="event-review-advanced-content">
+
+    {activeEvent && (<fieldset>
+      <legend>
+        Event boundary / hole correction
+      </legend>
+
+  <p>
+    Use these controls only when the automatic event
+    identifies the correct investigation but its hole
+    assignment or temporal boundaries require correction.
+  </p>
+
+  <div
+    style={{
+      display: 'grid',
+      gap: '0.75rem',
+    }}
+  >
+    <label>
+      <span>
+        Reviewed hole
+      </span>
+
+      <select
+        value={effectiveHoleIndex}
+        onChange={(event) =>
+          applyEventEdit({
+            manualHoleIndex: Number(event.target.value),
+          })
+        }
+      >
+        {geometry.holes.map((hole) => (
+          <option
+            key={hole.index}
+            value={hole.index}
+          >
+            {`Hole ${hole.index}${hole.isTarget
+              ? ' · TARGET'
+              : ''}`}
+          </option>
+        ))}
+      </select>
+    </label>
+
+    <dl className="track-correction-summary">
+      <div>
+        <dt>
+          Reviewed start
+        </dt>
+
+        <dd>
+          {effectiveStartFrame
+            ? (`${frameSeconds(effectiveStartFrame).toFixed(6)} s · ` +
+              `index ${effectiveStartPresentationIndex}`)
+            : 'Unavailable'}
+        </dd>
+      </div>
+
+      <div>
+        <dt>
+          Reviewed end
+        </dt>
+
+        <dd>
+          {effectiveEndFrame
+            ? (`${frameSeconds(effectiveEndFrame).toFixed(6)} s · ` +
+              `index ${effectiveEndPresentationIndex}`)
+            : 'Unavailable'}
+        </dd>
+      </div>
+    </dl>
+
+    <div className="actions">
+      <button
+        type="button"
+        disabled={
+          selectedPresentationIndex === null ||
+          selectedPresentationIndex >
+            effectiveEndPresentationIndex
+        }
+        onClick={() => {
+          if (selectedPresentationIndex === null) {
+            return;
+          }
+
+          applyEventEdit({
+            manualStartPresentationIndex:
+              selectedPresentationIndex,
+          });
+        }}
+      >
+        Set start to current frame
+      </button>
+
+      <button
+        type="button"
+        disabled={
+          selectedPresentationIndex === null ||
+          selectedPresentationIndex <
+            effectiveStartPresentationIndex
+        }
+        onClick={() => {
+          if (selectedPresentationIndex === null) {
+            return;
+          }
+
+          applyEventEdit({
+            manualEndPresentationIndex:
+              selectedPresentationIndex,
+          });
+        }}
+      >
+        Set end to current frame
+      </button>
+    </div>
+  </div>
+</fieldset>)}
+
+    <fieldset>
+      <legend>
+        Trial start review
+      </legend>
+
+      <p>
+        Automatic trial start is estimated from
+        sustained mouse presence. A reviewer may
+        replace it with the currently displayed
+        exact source frame without altering the
+        automatic value.
+      </p>
+
+      <dl className="track-correction-summary">
+        <div>
+          <dt>
+            Automatic trial start
+          </dt>
+
+          <dd>
+            {(automaticTrialWindow
+              .startPts.ticks /
+              automaticTrialWindow
+                .startPts.timescale).toFixed(6)} s
+            {' · index '}
+            {automaticTrialWindow
+              .startPresentationIndex}
+          </dd>
+        </div>
+
+        <div>
+          <dt>
+            Effective trial start
+          </dt>
+
+          <dd>
+            {(trialWindow
+              .startPts.ticks /
+              trialWindow
+                .startPts.timescale).toFixed(6)} s
+            {' · index '}
+            {trialWindow
+              .startPresentationIndex}
+          </dd>
+        </div>
+
+        <div>
+          <dt>
+            Trial-start provenance
+          </dt>
+
+          <dd>
+            {trialStartOverride
+              ? 'Manual override'
+              : 'Automatic'}
+          </dd>
+        </div>
+      </dl>
+
+      <div className="actions">
+        <button type="button" disabled={selectedPresentationIndex ===
+          null} onClick={() => {
+            if (selectedPresentationIndex ===
+              null) {
+              return;
+            }
+            onTrialStartOverrideChange({
+              presentationIndex: selectedPresentationIndex,
+              note: trialStartOverride
+                ?.note ??
+                '',
+              updatedAtIso: new Date()
+                .toISOString(),
+            });
+          }}>
+          Set trial start to current frame
+        </button>
+
+        <button type="button" disabled={trialStartOverride ===
+          null} onClick={() => onTrialStartOverrideChange(null)}>
+          Use automatic trial start
+        </button>
+      </div>
+
+      <label style={{
+        display: 'grid',
+        gap: '0.4rem',
+        marginTop: '0.75rem',
+      }}>
+        <span>
+          Trial-start review note
+        </span>
+
+        <textarea rows={2} disabled={trialStartOverride ===
+          null} value={trialStartOverride
+            ?.note ??
+            ''} placeholder="Optional reason for changing trial start" onChange={(event) => {
+              if (!trialStartOverride) {
+                return;
+              }
+              onTrialStartOverrideChange({
+                ...trialStartOverride,
+                note: event.target.value,
+                updatedAtIso: new Date()
+                  .toISOString(),
+              });
+            }} />
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>
+        Track point correction
+      </legend>
+
+      <p>
+        Correct the mouse centroid for the
+        currently displayed exact source frame,
+        mark the point as missing, or restore the
+        automatic tracking result.
+      </p>
+      <div className="actions" style={{
+        marginBottom: '0.75rem',
+      }}>
+        <button type="button" disabled={selectedPresentationIndex ===
+          null} aria-pressed={trackCorrectionClickMode} onClick={() => {
+            trackCorrectionDraggingRef
+              .current = false;
+            setTrackCorrectionClickMode((current) => !current);
+          }}>
+          {trackCorrectionClickMode
+            ? 'Finish positioning centroid'
+            : 'Position centroid on video'}
+        </button>
+      </div>
+      {trackCorrectionClickMode && (<p role="status">
+        Click anywhere on the source video,
+        or drag across it, to position the
+        corrected centroid. The change remains
+        a draft until you choose
+        “Save corrected centroid.”
+      </p>)}
+      <dl className="track-correction-summary">
+        <div>
+          <dt>
+            Source frame
+          </dt>
+
+          <dd>
+            {selectedPresentationIndex ??
+              'Unavailable'}
+          </dd>
+        </div>
+
+        <div>
+          <dt>
+            Automatic centroid
+          </dt>
+
+          <dd>
+            {selectedAutomaticPoint
+              ?.x !== null &&
+              selectedAutomaticPoint
+                ?.x !== undefined &&
+              selectedAutomaticPoint
+                ?.y !== null &&
+              selectedAutomaticPoint
+                ?.y !== undefined
+              ? (`${selectedAutomaticPoint.x.toFixed(2)}, ` +
+                `${selectedAutomaticPoint.y.toFixed(2)} px`)
+              : 'Not detected'}
+          </dd>
+        </div>
+
+        <div>
+          <dt>
+            Effective centroid
+          </dt>
+
+          <dd>
+            {selectedPoint
+              ?.x !== null &&
+              selectedPoint
+                ?.x !== undefined &&
+              selectedPoint
+                ?.y !== null &&
+              selectedPoint
+                ?.y !== undefined
+              ? (`${selectedPoint.x.toFixed(2)}, ` +
+                `${selectedPoint.y.toFixed(2)} px`)
+              : 'Not detected'}
+          </dd>
+        </div>
+
+        <div>
+          <dt>
+            Correction status
+          </dt>
+
+          <dd>
+            {selectedTrackCorrection
+              ?.kind ===
+              'position'
+              ? 'Manual position'
+              : selectedTrackCorrection
+                ?.kind ===
+                'missing'
+                ? 'Manually marked missing'
+                : 'Automatic'}
+          </dd>
+        </div>
+      </dl>
+
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(2,minmax(0,1fr))',
+        gap: '0.75rem',
+      }}>
+        <label>
+          <span>
+            Corrected X
+          </span>
+
+          <input
+            type="number"
+            min="0"
+            max={track.width - 1}
+            step="0.1"
+            value={trackCorrectionXInput}
+            onChange={(event) => setTrackCorrectionXInput(event.target.value)}
+          />
+        </label>
+
+        <label>
+          <span>
+            Corrected Y
+          </span>
+
+          <input
+            type="number"
+            min="0"
+            max={track.height - 1}
+            step="0.1"
+            value={trackCorrectionYInput}
+            onChange={(event) => setTrackCorrectionYInput(event.target.value)}
+          />
+        </label>
+      </div>
+
+      <label style={{
+        display: 'grid',
+        gap: '0.4rem',
+        marginTop: '0.75rem',
+      }}>
+        <span>
+          Track correction note
+        </span>
+
+        <textarea
+          rows={2}
+          value={trackCorrectionNote}
+          placeholder="Optional reason for correcting this track point"
+          onChange={(event) => setTrackCorrectionNote(event.target.value)}
+        />
+      </label>
+
+      {!trackCorrectionPositionValid &&
+        (trackCorrectionXInput !==
+          '' ||
+          trackCorrectionYInput !==
+          '') && (<p role="alert">
+            Corrected coordinates must be
+            finite values inside the source
+            frame.
+          </p>)}
+
+      <div className="actions" style={{
+        marginTop: '0.75rem',
+      }}>
+        <button type="button" disabled={!trackCorrectionPositionValid} onClick={saveManualTrackPosition}>
+          Save corrected centroid
+        </button>
+
+        <button type="button" disabled={selectedPresentationIndex ===
+          null} onClick={markCurrentTrackPointMissing}>
+          Mark point missing
+        </button>
+
+        <button type="button" disabled={!selectedTrackCorrection} onClick={resetCurrentTrackPoint}>
+          Reset to automatic
+        </button>
+      </div>
+    </fieldset>
+  </div>
+</details>
+
+    {manualAdditions.length > 0 && (<>
+      <h3>
+        Manually added investigations
+      </h3>
+
+      <div className="table-scroll" tabIndex={0} aria-label="Manually added investigation events">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">
+                Manual #
+              </th>
+
+              <th scope="col">
+                Hole
+              </th>
+
+              <th scope="col">
+                Start
+              </th>
+
+              <th scope="col">
+                End
+              </th>
+
+              <th scope="col">
+                Note
+              </th>
+
+              <th scope="col">
+                Action
+              </th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {manualAdditions
+              .slice()
+              .sort((a, b) => a.startPresentationIndex -
+                b.startPresentationIndex)
+              .map((addition) => {
+                const startFrame = frameByIndex.get(addition
+                  .startPresentationIndex);
+                const endFrame = frameByIndex.get(addition
+                  .endPresentationIndex);
+                return (<tr key={addition.id}>
+                  <td>
+                    M
+                    {addition.ordinal}
+                  </td>
+
+                  <td>
+                    {addition
+                      .holeIndex}
+                  </td>
+
+                  <td>
+                    {startFrame
+                      ? `${frameSeconds(startFrame).toFixed(3)} s`
+                      : 'Unavailable'}
+                  </td>
+
+                  <td>
+                    {endFrame
+                      ? `${frameSeconds(endFrame).toFixed(3)} s`
+                      : 'Unavailable'}
+                  </td>
+
+                  <td>
+                    {addition.note ||
+                      '—'}
+                  </td>
+
+                  <td>
+                    <button type="button" onClick={() => removeManualInvestigation(addition.id)}>
+                      Remove
+                    </button>
+                  </td>
+                </tr>);
+              })}
+          </tbody>
+        </table>
+      </div>
+    </>)}
+
 <details className="event-review-technical-details">
   <summary>
     Technical frame diagnostics
   </summary>
-    <dl className="metadata-grid">
+    <dl className="track-correction-summary">
       <div>
         <dt>Presentation index</dt>
 
@@ -1776,672 +2517,6 @@ export default function HoleEventReviewer(
         {exactFrameError ??
           'Unknown decoder error.'}
       </p>)}
-{activeEvent && (<fieldset>
-  <legend>
-    Event boundary / hole correction
-  </legend>
 
-  <p>
-    Use these controls only when the automatic event
-    identifies the correct investigation but its hole
-    assignment or temporal boundaries require correction.
-  </p>
-
-  <div
-    style={{
-      display: 'grid',
-      gap: '0.75rem',
-    }}
-  >
-    <label>
-      <span>
-        Reviewed hole
-      </span>
-
-      <select
-        value={effectiveHoleIndex}
-        onChange={(event) =>
-          applyEventEdit({
-            manualHoleIndex: Number(event.target.value),
-          })
-        }
-      >
-        {geometry.holes.map((hole) => (
-          <option
-            key={hole.index}
-            value={hole.index}
-          >
-            {`Hole ${hole.index}${hole.isTarget
-              ? ' · TARGET'
-              : ''}`}
-          </option>
-        ))}
-      </select>
-    </label>
-
-    <dl className="metadata-grid">
-      <div>
-        <dt>
-          Reviewed start
-        </dt>
-
-        <dd>
-          {effectiveStartFrame
-            ? (`${frameSeconds(effectiveStartFrame).toFixed(6)} s · ` +
-              `index ${effectiveStartPresentationIndex}`)
-            : 'Unavailable'}
-        </dd>
-      </div>
-
-      <div>
-        <dt>
-          Reviewed end
-        </dt>
-
-        <dd>
-          {effectiveEndFrame
-            ? (`${frameSeconds(effectiveEndFrame).toFixed(6)} s · ` +
-              `index ${effectiveEndPresentationIndex}`)
-            : 'Unavailable'}
-        </dd>
-      </div>
-    </dl>
-
-    <div className="actions">
-      <button
-        type="button"
-        disabled={
-          selectedPresentationIndex === null ||
-          selectedPresentationIndex >
-            effectiveEndPresentationIndex
-        }
-        onClick={() => {
-          if (selectedPresentationIndex === null) {
-            return;
-          }
-
-          applyEventEdit({
-            manualStartPresentationIndex:
-              selectedPresentationIndex,
-          });
-        }}
-      >
-        Set start to current frame
-      </button>
-
-      <button
-        type="button"
-        disabled={
-          selectedPresentationIndex === null ||
-          selectedPresentationIndex <
-            effectiveStartPresentationIndex
-        }
-        onClick={() => {
-          if (selectedPresentationIndex === null) {
-            return;
-          }
-
-          applyEventEdit({
-            manualEndPresentationIndex:
-              selectedPresentationIndex,
-          });
-        }}
-      >
-        Set end to current frame
-      </button>
-    </div>
-  </div>
-</fieldset>)}
-
-    <fieldset style={{
-      marginTop: '1rem',
-    }}>
-      <legend>
-        Trial start review
-      </legend>
-
-      <p>
-        Automatic trial start is estimated from
-        sustained mouse presence. A reviewer may
-        replace it with the currently displayed
-        exact source frame without altering the
-        automatic value.
-      </p>
-
-      <dl className="metadata-grid">
-        <div>
-          <dt>
-            Automatic trial start
-          </dt>
-
-          <dd>
-            {(automaticTrialWindow
-              .startPts.ticks /
-              automaticTrialWindow
-                .startPts.timescale).toFixed(6)} s
-            {' · index '}
-            {automaticTrialWindow
-              .startPresentationIndex}
-          </dd>
-        </div>
-
-        <div>
-          <dt>
-            Effective trial start
-          </dt>
-
-          <dd>
-            {(trialWindow
-              .startPts.ticks /
-              trialWindow
-                .startPts.timescale).toFixed(6)} s
-            {' · index '}
-            {trialWindow
-              .startPresentationIndex}
-          </dd>
-        </div>
-
-        <div>
-          <dt>
-            Trial-start provenance
-          </dt>
-
-          <dd>
-            {trialStartOverride
-              ? 'Manual override'
-              : 'Automatic'}
-          </dd>
-        </div>
-      </dl>
-
-      <div className="actions">
-        <button type="button" disabled={selectedPresentationIndex ===
-          null} onClick={() => {
-            if (selectedPresentationIndex ===
-              null) {
-              return;
-            }
-            onTrialStartOverrideChange({
-              presentationIndex: selectedPresentationIndex,
-              note: trialStartOverride
-                ?.note ??
-                '',
-              updatedAtIso: new Date()
-                .toISOString(),
-            });
-          }}>
-          Set trial start to current frame
-        </button>
-
-        <button type="button" disabled={trialStartOverride ===
-          null} onClick={() => onTrialStartOverrideChange(null)}>
-          Use automatic trial start
-        </button>
-      </div>
-
-      <label style={{
-        display: 'grid',
-        gap: '0.4rem',
-        marginTop: '0.75rem',
-      }}>
-        <span>
-          Trial-start review note
-        </span>
-
-        <textarea rows={2} disabled={trialStartOverride ===
-          null} value={trialStartOverride
-            ?.note ??
-            ''} placeholder="Optional reason for changing trial start" onChange={(event) => {
-              if (!trialStartOverride) {
-                return;
-              }
-              onTrialStartOverrideChange({
-                ...trialStartOverride,
-                note: event.target.value,
-                updatedAtIso: new Date()
-                  .toISOString(),
-              });
-            }} />
-      </label>
-    </fieldset>
-
-    <fieldset style={{
-      marginTop: '1rem',
-    }}>
-      <legend>
-        Track point correction
-      </legend>
-
-      <p>
-        Correct the mouse centroid for the
-        currently displayed exact source frame,
-        mark the point as missing, or restore the
-        automatic tracking result.
-      </p>
-      <div className="actions" style={{
-        marginBottom: '0.75rem',
-      }}>
-        <button type="button" disabled={selectedPresentationIndex ===
-          null} aria-pressed={trackCorrectionClickMode} onClick={() => {
-            trackCorrectionDraggingRef
-              .current = false;
-            setTrackCorrectionClickMode((current) => !current);
-          }}>
-          {trackCorrectionClickMode
-            ? 'Finish positioning centroid'
-            : 'Position centroid on video'}
-        </button>
-      </div>
-      {trackCorrectionClickMode && (<p role="status">
-        Click anywhere on the source video,
-        or drag across it, to position the
-        corrected centroid. The change remains
-        a draft until you choose
-        “Save corrected centroid.”
-      </p>)}
-      <dl className="metadata-grid">
-        <div>
-          <dt>
-            Source frame
-          </dt>
-
-          <dd>
-            {selectedPresentationIndex ??
-              'Unavailable'}
-          </dd>
-        </div>
-
-        <div>
-          <dt>
-            Automatic centroid
-          </dt>
-
-          <dd>
-            {selectedAutomaticPoint
-              ?.x !== null &&
-              selectedAutomaticPoint
-                ?.x !== undefined &&
-              selectedAutomaticPoint
-                ?.y !== null &&
-              selectedAutomaticPoint
-                ?.y !== undefined
-              ? (`${selectedAutomaticPoint.x.toFixed(2)}, ` +
-                `${selectedAutomaticPoint.y.toFixed(2)} px`)
-              : 'Not detected'}
-          </dd>
-        </div>
-
-        <div>
-          <dt>
-            Effective centroid
-          </dt>
-
-          <dd>
-            {selectedPoint
-              ?.x !== null &&
-              selectedPoint
-                ?.x !== undefined &&
-              selectedPoint
-                ?.y !== null &&
-              selectedPoint
-                ?.y !== undefined
-              ? (`${selectedPoint.x.toFixed(2)}, ` +
-                `${selectedPoint.y.toFixed(2)} px`)
-              : 'Not detected'}
-          </dd>
-        </div>
-
-        <div>
-          <dt>
-            Correction status
-          </dt>
-
-          <dd>
-            {selectedTrackCorrection
-              ?.kind ===
-              'position'
-              ? 'Manual position'
-              : selectedTrackCorrection
-                ?.kind ===
-                'missing'
-                ? 'Manually marked missing'
-                : 'Automatic'}
-          </dd>
-        </div>
-      </dl>
-
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(2,minmax(0,1fr))',
-        gap: '0.75rem',
-      }}>
-        <label>
-          <span>
-            Corrected X
-          </span>
-
-          <input
-            type="number"
-            min="0"
-            max={track.width - 1}
-            step="0.1"
-            value={trackCorrectionXInput}
-            onChange={(event) => setTrackCorrectionXInput(event.target.value)}
-          />
-        </label>
-
-        <label>
-          <span>
-            Corrected Y
-          </span>
-
-          <input
-            type="number"
-            min="0"
-            max={track.height - 1}
-            step="0.1"
-            value={trackCorrectionYInput}
-            onChange={(event) => setTrackCorrectionYInput(event.target.value)}
-          />
-        </label>
-      </div>
-
-      <label style={{
-        display: 'grid',
-        gap: '0.4rem',
-        marginTop: '0.75rem',
-      }}>
-        <span>
-          Track correction note
-        </span>
-
-        <textarea
-          rows={2}
-          value={trackCorrectionNote}
-          placeholder="Optional reason for correcting this track point"
-          onChange={(event) => setTrackCorrectionNote(event.target.value)}
-        />
-      </label>
-
-      {!trackCorrectionPositionValid &&
-        (trackCorrectionXInput !==
-          '' ||
-          trackCorrectionYInput !==
-          '') && (<p role="alert">
-            Corrected coordinates must be
-            finite values inside the source
-            frame.
-          </p>)}
-
-      <div className="actions" style={{
-        marginTop: '0.75rem',
-      }}>
-        <button type="button" disabled={!trackCorrectionPositionValid} onClick={saveManualTrackPosition}>
-          Save corrected centroid
-        </button>
-
-        <button type="button" disabled={selectedPresentationIndex ===
-          null} onClick={markCurrentTrackPointMissing}>
-          Mark point missing
-        </button>
-
-        <button type="button" disabled={!selectedTrackCorrection} onClick={resetCurrentTrackPoint}>
-          Reset to automatic
-        </button>
-      </div>
-    </fieldset>
-
-    <fieldset style={{
-      marginTop: '1rem',
-    }}>
-
-      <legend>
-        Add missed investigation
-      </legend>
-
-      <p>
-        Browse anywhere in the analyzed trial,
-        mark the first and last frame of an
-        investigation missed by the automatic
-        detector, then assign the reviewed hole.
-      </p>
-
-      {firstSourcePresentationIndex !==
-        null &&
-        lastSourcePresentationIndex !==
-        null && (<>
-          <label style={{
-            display: 'grid',
-            gap: '0.4rem',
-          }}>
-            <span>
-              Browse source frames
-            </span>
-
-            <input
-              type="range"
-              min={firstSourcePresentationIndex ?? 0}
-              max={lastSourcePresentationIndex ?? 0}
-              step="1"
-              value={selectedPresentationIndex ??
-                firstSourcePresentationIndex ?? 0}
-              onChange={(event) => setSelectedPresentationIndex(Number(event.target.value))}
-            />
-          </label>
-
-          <p>
-            Current frame:{' '}
-            <strong>
-              {selectedPresentationIndex ??
-                firstSourcePresentationIndex}
-            </strong>
-          </p>
-        </>)}
-
-      <label>
-        <span>
-          Manual event hole
-        </span>
-
-        <select value={manualDraftHoleIndex} onChange={(event) => setManualDraftHoleIndex(Number(event.target.value))}>
-          {geometry.holes.map((hole) => (<option key={hole.index} value={hole.index}>
-            {`Hole ${hole.index}${hole.isTarget
-              ? ' · TARGET'
-              : ''}`}
-          </option>))}
-        </select>
-      </label>
-
-      <div className="actions" style={{
-        marginTop: '0.75rem',
-      }}>
-        <button type="button" disabled={selectedPresentationIndex ===
-          null} onClick={() => {
-            if (selectedPresentationIndex ===
-              null) {
-              return;
-            }
-            setManualDraftStartPresentationIndex(selectedPresentationIndex);
-          }}>
-          Set manual start
-        </button>
-
-        <button type="button" disabled={selectedPresentationIndex ===
-          null} onClick={() => {
-            if (selectedPresentationIndex ===
-              null) {
-              return;
-            }
-            setManualDraftEndPresentationIndex(selectedPresentationIndex);
-          }}>
-          Set manual end
-        </button>
-      </div>
-
-      <dl className="metadata-grid">
-        <div>
-          <dt>
-            Manual start
-          </dt>
-
-          <dd>
-            {manualDraftStartPresentationIndex !==
-              null
-              ? (`${frameSeconds(frameByIndex.get(manualDraftStartPresentationIndex)!).toFixed(6)} s · index ${manualDraftStartPresentationIndex}`)
-              : 'Not set'}
-          </dd>
-        </div>
-
-        <div>
-          <dt>
-            Manual end
-          </dt>
-
-          <dd>
-            {manualDraftEndPresentationIndex !==
-              null
-              ? (`${frameSeconds(frameByIndex.get(manualDraftEndPresentationIndex)!).toFixed(6)} s · index ${manualDraftEndPresentationIndex}`)
-              : 'Not set'}
-          </dd>
-        </div>
-      </dl>
-
-      {manualDraftStartPresentationIndex !==
-        null &&
-        manualDraftEndPresentationIndex !==
-        null &&
-        manualDraftStartPresentationIndex >
-        manualDraftEndPresentationIndex && (<p role="alert">
-          Manual event start must occur
-          before or at the manual event end.
-        </p>)}
-      {manualDraftOutsideTrial && (<p role="alert">
-        A manually added investigation must
-        fall within the currently reviewed
-        trial window.
-      </p>)}
-      <label style={{
-        display: 'grid',
-        gap: '0.4rem',
-        marginTop: '0.75rem',
-      }}>
-        <span>
-          Manual event note
-        </span>
-
-        <textarea
-          rows={3}
-          value={manualDraftNote}
-          placeholder="Optional reason this event was added manually"
-          onChange={(event) => setManualDraftNote(event.target.value)}
-        />
-      </label>
-
-      <div className="actions" style={{
-        marginTop: '0.75rem',
-      }}>
-        <button type="button" disabled={manualDraftStartPresentationIndex ===
-          null ||
-          manualDraftEndPresentationIndex ===
-          null ||
-          manualDraftStartPresentationIndex >
-          manualDraftEndPresentationIndex ||
-          manualDraftOutsideTrial} onClick={addManualInvestigation}>
-          Add manual investigation
-        </button>
-
-        <button type="button" onClick={() => {
-          setManualDraftStartPresentationIndex(null);
-          setManualDraftEndPresentationIndex(null);
-          setManualDraftNote('');
-        }}>
-          Clear manual draft
-        </button>
-      </div>
-    </fieldset>
-    {manualAdditions.length > 0 && (<>
-      <h3>
-        Manually added investigations
-      </h3>
-
-      <div className="table-scroll" tabIndex={0} aria-label="Manually added investigation events">
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">
-                Manual #
-              </th>
-
-              <th scope="col">
-                Hole
-              </th>
-
-              <th scope="col">
-                Start
-              </th>
-
-              <th scope="col">
-                End
-              </th>
-
-              <th scope="col">
-                Note
-              </th>
-
-              <th scope="col">
-                Action
-              </th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {manualAdditions
-              .slice()
-              .sort((a, b) => a.startPresentationIndex -
-                b.startPresentationIndex)
-              .map((addition) => {
-                const startFrame = frameByIndex.get(addition
-                  .startPresentationIndex);
-                const endFrame = frameByIndex.get(addition
-                  .endPresentationIndex);
-                return (<tr key={addition.id}>
-                  <td>
-                    M
-                    {addition.ordinal}
-                  </td>
-
-                  <td>
-                    {addition
-                      .holeIndex}
-                  </td>
-
-                  <td>
-                    {startFrame
-                      ? `${frameSeconds(startFrame).toFixed(3)} s`
-                      : 'Unavailable'}
-                  </td>
-
-                  <td>
-                    {endFrame
-                      ? `${frameSeconds(endFrame).toFixed(3)} s`
-                      : 'Unavailable'}
-                  </td>
-
-                  <td>
-                    {addition.note ||
-                      '—'}
-                  </td>
-
-                  <td>
-                    <button type="button" onClick={() => removeManualInvestigation(addition.id)}>
-                      Remove
-                    </button>
-                  </td>
-                </tr>);
-              })}
-          </tbody>
-        </table>
-      </div>
-    </>)}
   </section>);
 }
