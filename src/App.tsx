@@ -37,6 +37,7 @@ import TrajectoryPreview from './components/TrajectoryPreview';
 import { processTrajectory } from './tracking/trajectoryProcessing';
 import TrajectoryComparisonView from './components/TrajectoryComparisonView';
 import TimeColoredTrajectoryView from './components/TimeColoredTrajectoryView';
+import OccupancyHeatMap from './components/OccupancyHeatMap';
 import { computeTrajectoryMetrics } from './tracking/trajectoryMetrics';
 import HoleCalibrationView from './components/HoleCalibrationView';
 import { resolveTrackOrientation, summarizeOrientation } from './tracking/orientation';
@@ -7310,6 +7311,18 @@ export default function App() {
               confirmedEscapeTimeSeconds={confirmedEscapeTimeSeconds}
               targetDefined={targetMetricsEnabled}
             />)}
+
+          {processedTrajectory &&
+            result?.background &&
+            arenaCalibration &&
+            holeGeometry && (<OccupancyHeatMap
+              processedTrajectory={processedTrajectory}
+              background={result.background}
+              calibration={arenaCalibration}
+              holeGeometry={holeGeometry}
+              targetDefined={targetMetricsEnabled}
+            />)}
+
 
           {holeInvestigationResult && (<section
             className="card"
