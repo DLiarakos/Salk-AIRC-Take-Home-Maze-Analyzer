@@ -218,3 +218,46 @@ export interface TrialWindow {
   endPts:
     RationalTime | null;
 }
+export interface TrajectorySmoothingSettings {
+  medianWindowSeconds: number;
+  meanWindowSeconds: number;
+  maxGapSeconds: number;
+}
+
+export interface AnalysisTrajectoryPoint {
+  pts: RationalTime;
+  timeSeconds: number;
+
+  x: number;
+  y: number;
+
+  segmentId: number;
+
+  /**
+   * More than 1 means multiple observations
+   * shared the exact same source PTS and were
+   * collapsed into one temporal observation.
+   */
+  sourceObservationCount: number;
+}
+
+export interface TrajectoryQcSummary {
+  sourceObservationCount: number;
+  analysisObservationCount: number;
+  missingObservationCount: number;
+
+  duplicatePtsCollapsed: number;
+  nonIncreasingTimestampCount: number;
+  segmentCount: number;
+
+  medianSmoothingCorrectionPixels: number;
+  p95SmoothingCorrectionPixels: number;
+  maximumSmoothingCorrectionPixels: number;
+}
+
+export interface ProcessedTrajectory {
+  raw: AnalysisTrajectoryPoint[];
+  smoothed: AnalysisTrajectoryPoint[];
+  qc: TrajectoryQcSummary;
+  settings: TrajectorySmoothingSettings;
+}
