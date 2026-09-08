@@ -181,6 +181,29 @@ export interface BodyTrackPoint {
 
   x: number | null;
   y: number | null;
+  
+  axisX: number | null;
+  axisY: number | null;
+
+  candidateAX: number | null;
+  candidateAY: number | null;
+  candidateBX: number | null;
+  candidateBY: number | null;
+
+  shapeConfidence: number | null;
+
+  noseX: number | null;
+  noseY: number | null;
+  rearX: number | null;
+  rearY: number | null;
+
+  orientationConfidence: number | null;
+
+  orientationMethod:
+  | 'motion'
+  | 'continuity'
+  | 'unresolved'
+  | 'not-detected';
 
   areaPixels: number | null;
   dominance: number | null;
@@ -287,4 +310,83 @@ export interface HoleGeometry {
   ];
 
   holes: HoleRoi[];
+}
+export interface OrientationSettings {
+  motionLookbackSeconds: number;
+  minimumDirectionalSpeedPixelsPerSecond: number;
+  minimumMotionAlignment: number;
+  maximumContinuityGapSeconds: number;
+  minimumContinuityAlignment: number;
+  minimumShapeConfidence: number;
+}
+export interface HoleInvestigationSettings {
+  entryMarginPixels: number;
+  sustainMarginPixels: number;
+  minimumDwellSeconds: number;
+  maximumInterruptionSeconds: number;
+  minimumHeadHoleAlignment: number;
+}
+
+export type HoleEvidenceState =
+  | 'investigating'
+  | 'outside'
+  | 'near-but-misaligned'
+  | 'unknown';
+
+export interface HoleInvestigationEvidence {
+  presentationIndex: number;
+  timeSeconds: number;
+
+  noseX: number | null;
+  noseY: number | null;
+
+  state: HoleEvidenceState;
+  holeIndex: number | null;
+  distancePixels: number | null;
+  headHoleAlignment: number | null;
+  withinEntryRadius: boolean;
+  withinSustainRadius: boolean;
+}
+
+export interface HoleInvestigationEvent {
+  eventIndex: number;
+  holeIndex: number;
+  isTarget: boolean;
+
+  startPresentationIndex: number;
+  endPresentationIndex: number;
+
+  startTimeSeconds: number;
+  endTimeSeconds: number;
+  durationSeconds: number;
+
+  positiveObservationCount: number;
+
+  minimumNoseDistancePixels: number;
+  closestNoseX: number;
+  closestNoseY: number;
+}
+
+export interface HoleInvestigationQc {
+  trialObservationCount: number;
+  uniqueTimestampCount: number;
+  duplicatePtsCollapsed: number;
+
+  usableNoseObservations: number;
+  unknownNoseObservations: number;
+  positiveEvidenceObservations: number;
+  proximityPositiveObservations: number;
+  alignmentRejectedObservations: number;
+  entryTriggerObservations: number;
+  candidateEventCount: number;
+  acceptedEventCount: number;
+  rejectedShortEventCount: number;
+
+}
+
+export interface HoleInvestigationResult {
+  evidence: HoleInvestigationEvidence[];
+  events: HoleInvestigationEvent[];
+  qc: HoleInvestigationQc;
+  settings: HoleInvestigationSettings;
 }

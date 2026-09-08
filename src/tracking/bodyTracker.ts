@@ -3,6 +3,7 @@ import type { FrameTiming,} from '../models/media';
 import type {BackgroundModel,BodyTrackPoint,SegmentationSettings,} from '../models/tracking';
 import type {ArenaMask,} from './arenaMask';
 import { findForegroundComponents,segmentDarkForeground,} from './segmentation';
+import { estimateBodyShape } from './orientation';
 
 export function trackBodyFrame(
   pixels: Uint8Array,
@@ -30,7 +31,13 @@ export function trackBodyFrame(
 
   const body =
     detectBody(components);
-
+const shape =
+  components.largestComponent
+    ? estimateBodyShape(
+        components.largestComponent,
+        segmentation.width,
+      )
+    : null;
   if (!body) {
     return {
       presentationIndex,
@@ -38,6 +45,23 @@ export function trackBodyFrame(
 
       x: null,
       y: null,
+      axisX: null,
+      axisY: null,
+
+      candidateAX: null,
+      candidateAY: null,
+      candidateBX: null,
+      candidateBY: null,
+
+      shapeConfidence: null,
+
+      noseX: null,
+      noseY: null,
+      rearX: null,
+      rearY: null,
+
+      orientationConfidence: null,
+      orientationMethod: 'not-detected',
 
       areaPixels: null,
       dominance: null,
@@ -58,6 +82,34 @@ export function trackBodyFrame(
 
     x: body.x,
     y: body.y,
+    axisX:
+      shape?.axisX ?? null,
+
+    axisY:
+      shape?.axisY ?? null,
+
+    candidateAX:
+      shape?.candidateAX ?? null,
+
+    candidateAY:
+      shape?.candidateAY ?? null,
+
+    candidateBX:
+      shape?.candidateBX ?? null,
+
+    candidateBY:
+      shape?.candidateBY ?? null,
+
+    shapeConfidence:
+      shape?.shapeConfidence ?? null,
+
+    noseX: null,
+    noseY: null,
+    rearX: null,
+    rearY: null,
+
+    orientationConfidence: 0,
+    orientationMethod: 'unresolved',
 
     areaPixels:
       body.areaPixels,

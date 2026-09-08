@@ -485,15 +485,12 @@ const backgroundSamplePromises:
         );
 
       representativeIndices =
-        new Set([
-          0,
-
-          Math.floor(
-            lastIndex / 2,
-          ),
-
-          lastIndex,
-        ]);
+  new Set(
+    evenlySpacedIndices(
+      track.nb_samples,
+      9,
+    ),
+  );
         backgroundSampleIndices =
   new Set(
     evenlySpacedIndices(
