@@ -42,6 +42,7 @@ import { resolveTrackOrientation, summarizeOrientation } from './tracking/orient
 import OrientationPreview from './components/OrientationPreview';
 import { detectHoleInvestigations } from './tracking/holeInvestigation';
 import HoleInvestigationPreview from './components/HoleInvestigationPreview';
+import HoleVisitRaster from './components/HoleVisitRaster';
 import HoleEventReviewer, { holeEventReviewKey, type HoleEventReviewDecisionMap } from './components/HoleEventReviewer';
 import { computeBarnesPrimaryMetrics, computeBarnesEscapeMetrics } from './tracking/behavioralMetrics';
 import { detectEscapeCandidate } from './tracking/escapeDetection';
@@ -5944,12 +5945,26 @@ export default function App() {
     activeBatchReviewReadiness,
     batchAnalysisSnapshots,
   ]);
-  const first = result?.frames[0] ?? null;
-  const last = result?.frames.at(-1) ?? null;
-  const durationFromPresentation = first && last ? timeToSeconds(last.pts) - timeToSeconds(first.pts) : null;
-  const calibrationFrame = result?.representativeFrames.length
-    ? result.representativeFrames[Math.floor(result.representativeFrames.length / 2)]
-    : null;
+    const first = result?.frames[0] ?? null;
+    const last = result?.frames.at(-1) ?? null;
+    const durationFromPresentation = first && last ? timeToSeconds(last.pts) - timeToSeconds(first.pts) : null;
+
+    /*
+    * Display-only endpoints for scientific result visualizations.
+    * Reviewed manual escape-time overrides are already represented by
+    * analysisEscapeCandidate.
+    */
+    const recordingEndTimeSeconds = last
+      ? timeToSeconds(last.pts)
+      : null;
+    const confirmedEscapeTimeSeconds = analysisEscapeCandidate &&
+      activeEscapeReview?.status === 'confirmed'
+      ? analysisEscapeCandidate.escapeTimeSeconds
+      : null;
+
+    const calibrationFrame = result?.representativeFrames.length
+      ? result.representativeFrames[Math.floor(result.representativeFrames.length / 2)]
+      : null;
   return (<main className="page-shell">
     <section className="card" aria-labelledby="page-title">
       <p className="eyebrow">Prototype {TOOL_VERSION}</p>
@@ -7257,32 +7272,48 @@ export default function App() {
                 result={holeInvestigationResult}
                 settings={holeInvestigationSettings}
               />)}
-            {selectedFile &&
-              result &&
-              bodyTrack &&
-              orientedTrack &&
-              holeGeometry &&
-              holeInvestigationResult &&
-              trialWindow && automaticTrialWindow && (<HoleEventReviewer
-                file={selectedFile}
-                frames={result.frames}
-                track={orientedTrack}
-                geometry={holeGeometry}
-                result={holeInvestigationResult}
-                settings={holeInvestigationSettings}
-                decisions={holeEventReviewDecisions}
-                onDecisionsChange={setHoleEventReviewDecisions}
-                manualAdditions={manualHoleEventAdditions}
-                onManualAdditionsChange={setManualHoleEventAdditions}
-                trialWindow={trialWindow}
-                automaticTrialWindow={automaticTrialWindow}
-                trialStartOverride={trialStartOverride}
-                onTrialStartOverrideChange={setTrialStartOverride}
-                automaticTrack={bodyTrack}
-                manualTrackPointCorrections={manualTrackPointCorrections}
-                onManualTrackPointCorrectionsChange={setManualTrackPointCorrections}
-              />)}
-            {holeInvestigationResult && (<section className="card" aria-labelledby="final-reviewed-events-heading">
+           {selectedFile &&
+            result &&
+            bodyTrack &&
+            orientedTrack &&
+            holeGeometry &&
+            holeInvestigationResult &&
+            trialWindow && automaticTrialWindow && (<HoleEventReviewer
+              file={selectedFile}
+              frames={result.frames}
+              track={orientedTrack}
+              geometry={holeGeometry}
+              result={holeInvestigationResult}
+              settings={holeInvestigationSettings}
+              decisions={holeEventReviewDecisions}
+              onDecisionsChange={setHoleEventReviewDecisions}
+              manualAdditions={manualHoleEventAdditions}
+              onManualAdditionsChange={setManualHoleEventAdditions}
+              trialWindow={trialWindow}
+              automaticTrialWindow={automaticTrialWindow}
+              trialStartOverride={trialStartOverride}
+              onTrialStartOverrideChange={setTrialStartOverride}
+              automaticTrack={bodyTrack}
+              manualTrackPointCorrections={manualTrackPointCorrections}
+              onManualTrackPointCorrectionsChange={setManualTrackPointCorrections}
+            />)}
+
+          {holeInvestigationResult &&
+            holeGeometry &&
+            trialWindow &&
+            recordingEndTimeSeconds !== null && (<HoleVisitRaster
+              events={finalReviewedEvents}
+              geometry={holeGeometry}
+              trialWindow={trialWindow}
+              recordingEndTimeSeconds={recordingEndTimeSeconds}
+              confirmedEscapeTimeSeconds={confirmedEscapeTimeSeconds}
+              targetDefined={targetMetricsEnabled}
+            />)}
+
+          {holeInvestigationResult && (<section
+            className="card"
+            aria-labelledby="final-reviewed-events-heading"
+          >
               <h3 id="final-reviewed-events-heading">
                 Final reviewed investigation set
               </h3>
