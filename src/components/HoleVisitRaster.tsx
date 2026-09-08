@@ -278,31 +278,58 @@ export default function HoleVisitRaster({
           </g>);
         })}
         {firstTargetEvent && (() => {
-  const x = xForTime(firstTargetEvent.startTimeSeconds);
-  const latencySeconds =
-    firstTargetEvent.startTimeSeconds - trialStartTimeSeconds;
+            const x = xForTime(firstTargetEvent.startTimeSeconds);
+            const latencySeconds =
+                firstTargetEvent.startTimeSeconds - trialStartTimeSeconds;
 
-  return (<g>
-    <line
-      x1={x}
-      y1={TOP_MARGIN}
-      x2={x}
-      y2={plotBottom}
-      stroke="#111"
-      strokeWidth="1.5"
-      strokeDasharray="6 4"
-    />
+            return (<g>
+                <line
+                x1={x}
+                y1={TOP_MARGIN}
+                x2={x}
+                y2={plotBottom}
+                stroke="#111"
+                strokeWidth="1.5"
+                strokeDasharray="6 4"
+                />
 
-    <text
-      x={x + 5}
-      y={TOP_MARGIN - 8}
-      fontSize="11"
-      fontWeight="600"
-    >
-      {`First target · ${latencySeconds.toFixed(1)} s`}
-    </text>
-  </g>);
-})()}
+                <text
+                x={x + 5}
+                y={TOP_MARGIN - 8}
+                fontSize="11"
+                fontWeight="600"
+                >
+                {`First target · ${latencySeconds.toFixed(1)} s`}
+                </text>
+            </g>);
+            })()}
+
+        {confirmedEscapeTimeSeconds !== null && (() => {
+            const x = xForTime(confirmedEscapeTimeSeconds);
+            const elapsed =
+                confirmedEscapeTimeSeconds - trialStartTimeSeconds;
+
+            return (<g>
+                <line
+                x1={x}
+                y1={TOP_MARGIN}
+                x2={x}
+                y2={plotBottom}
+                stroke="#111"
+                strokeWidth="2"
+                />
+
+                <text
+                x={x - 5}
+                y={TOP_MARGIN - 8}
+                textAnchor="end"
+                fontSize="11"
+                fontWeight="600"
+                >
+                {`Escape · ${elapsed.toFixed(1)} s`}
+                </text>
+            </g>);
+            })()}
         {visibleEvents.map((event) => {
           const rowIndex = holes.findIndex((hole) =>
             hole.index === event.holeIndex);
