@@ -566,3 +566,157 @@ export interface HoleInvestigationResult {
   qc: HoleInvestigationQc;
   settings: HoleInvestigationSettings;
 }
+export interface QuadrantWindowMetrics {
+  startTimeSeconds: number;
+  endTimeSeconds: number;
+  windowDurationSeconds: number;
+
+  observedDurationSeconds: number;
+  observedCoverageFraction: number | null;
+
+  targetQuadrantTimeSeconds: number;
+  targetQuadrantTimeFraction: number | null;
+
+  totalPathPixels: number;
+  targetQuadrantPathPixels: number;
+  targetQuadrantPathFraction: number | null;
+
+  targetQuadrantEntryCount: number;
+  initiallyInsideTargetQuadrant: boolean;
+
+  observationCount: number;
+}
+
+export interface TargetQuadrantMetrics {
+  targetHoleIndex: number;
+
+  targetAngleRadians: number;
+
+  /*
+   * A standard four-sector division:
+   * target quadrant = +/-45 degrees around
+   * the radial direction of the target hole.
+   */
+  quadrantHalfWidthRadians: number;
+
+  analyzedTrial:
+    QuadrantWindowMetrics;
+
+  preTarget:
+    QuadrantWindowMetrics | null;
+}
+
+export type SearchStrategy =
+  | 'direct'
+  | 'serial'
+  | 'random'
+  | 'uncertain';
+
+export interface SearchStrategySettings {
+    maxDirectPrimaryErrors: number;
+
+  /*
+   * Direct search may contain repeated investigation
+   * of one localized incorrect hole without representing
+   * broad exploratory search.
+   */
+  maxDirectUniqueIncorrectHoles: number;
+
+  /*
+   * Circular hole steps from the target.
+   *
+   * Example with 20 holes:
+   * target 0 → holes 19 and 1 are distance 1.
+   */
+  maxDirectIncorrectHoleDistance: number;
+
+  minimumDirectPathEfficiency: number;
+
+  minimumSerialAdjacentTransitionFraction:
+    number;
+
+  minimumSerialDirectionalConsistency:
+    number;
+  maximumSerialDirectionReversalFraction:
+    number;
+
+  minimumSerialPerimeterTimeFraction:
+    number;
+
+  perimeterRadiusFraction: number;
+
+  minimumTransitionsForSerial: number;
+}
+
+export type SearchStrategyConfidence =
+  | 'high'
+  | 'moderate'
+  | 'low';
+
+export interface SearchStrategyResult {
+  automaticStrategy:
+    SearchStrategy;
+
+  confidence:
+    SearchStrategyConfidence;
+
+  targetReached: boolean;
+
+  searchStartTimeSeconds: number;
+  searchEndTimeSeconds: number;
+
+  searchPathLengthPixels: number;
+
+  straightLineDisplacementPixels:
+    number;
+
+  pathEfficiency:
+    number | null;
+
+    primaryErrorCount: number;
+
+  uniqueIncorrectHoleCount: number;
+
+  repeatedPrimaryErrorCount: number;
+
+  maximumIncorrectHoleDistanceFromTarget:
+    number | null;
+
+  investigatedHoleSequence:
+    number[];
+
+  holeTransitionCount: number;
+
+  adjacentTransitionCount: number;
+
+  adjacentTransitionFraction:
+    number | null;
+
+  directionalConsistency:
+    number | null;
+
+  directionReversalCount: number;
+
+  directionReversalOpportunityCount:
+    number;
+
+  directionReversalFraction:
+    number | null;
+
+  perimeterTimeFraction:
+    number | null;
+
+  unreviewedInvestigationCount:
+    number;
+
+  reasoning: string[];
+}
+
+export interface SearchStrategyOverride {
+  strategy:
+    SearchStrategy;
+
+  note: string;
+
+  updatedAtIso: string;
+}
