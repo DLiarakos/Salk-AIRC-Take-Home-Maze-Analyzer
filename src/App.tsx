@@ -761,7 +761,66 @@ const INVESTIGATION_EVENT_COLUMNS = [
   'review_note',
   'reviewed_at_iso',
 ] as const;
+const ANALYSIS_PARAMETER_COLUMNS = [
+  'tool_version',
+  'snapshot_schema_version',
+  'file_name',
+  'snapshot_captured_at_iso',
 
+  'arena_center_x_px',
+  'arena_center_y_px',
+  'platform_radius_px',
+  'tracking_margin_px',
+  'platform_diameter_cm',
+
+  'hole_count',
+  'hole_roi_radius_px',
+  'target_hole_index_0based',
+  'target_hole_number_1based',
+  'manually_adjusted_holes',
+
+  'segmentation_difference_threshold',
+  'segmentation_min_component_area_px',
+
+  'trajectory_median_window_s',
+  'trajectory_mean_window_s',
+  'trajectory_max_gap_s',
+
+  'outlier_rejection_enabled',
+  'outlier_max_jump_speed_px_s',
+
+  'orientation_motion_lookback_s',
+  'orientation_min_directional_speed_px_s',
+  'orientation_min_motion_alignment',
+  'orientation_max_continuity_gap_s',
+  'orientation_min_continuity_alignment',
+  'orientation_min_shape_confidence',
+
+  'investigation_entry_margin_px',
+  'investigation_sustain_margin_px',
+  'investigation_min_dwell_s',
+  'investigation_max_interruption_s',
+  'investigation_min_head_hole_alignment',
+
+  'escape_min_terminal_absence_s',
+  'escape_lookback_s',
+  'escape_proximity_margin_px',
+  'escape_max_terminal_body_area_fraction',
+  'escape_min_terminal_collapse_s',
+  'escape_max_s_from_target_end_to_disappearance',
+  'escape_max_s_from_target_end_to_recording_end',
+
+  'strategy_max_direct_primary_errors',
+  'strategy_max_direct_unique_incorrect_holes',
+  'strategy_max_direct_incorrect_hole_distance',
+  'strategy_min_direct_path_efficiency',
+  'strategy_min_serial_adjacent_transition_fraction',
+  'strategy_min_serial_directional_consistency',
+  'strategy_max_serial_direction_reversal_fraction',
+  'strategy_min_serial_perimeter_time_fraction',
+  'strategy_perimeter_radius_fraction',
+  'strategy_min_transitions_for_serial',
+] as const;
 function rationalSeconds(
   value:
     | {
@@ -1643,7 +1702,259 @@ analysis_duration_s:
 
   return rows;
 }
+function buildAnalysisParameterRows(
+  batchItems: BatchItem[],
+  snapshots: Record<
+    string,
+    BatchAnalysisSnapshot
+  >,
+): CsvRow[] {
+  const rows: CsvRow[] = [];
 
+  for (const item of batchItems) {
+    const snapshot =
+      snapshots[item.id];
+
+    if (!snapshot) {
+      continue;
+    }
+
+    const arena =
+      snapshot.calibration.arena;
+
+    const holes =
+      snapshot.calibration.holes;
+
+    const segmentation =
+      snapshot.settings.segmentation;
+
+    const smoothing =
+      snapshot.settings
+        .trajectorySmoothing;
+
+    const outlier =
+      snapshot.settings
+        .trajectoryOutlier;
+
+    const orientation =
+      snapshot.settings.orientation;
+
+    const investigation =
+      snapshot.settings
+        .holeInvestigation;
+
+    const escape =
+      snapshot.settings
+        .escapeDetection;
+
+    const strategy =
+      snapshot.settings
+        .searchStrategy;
+
+    rows.push({
+      tool_version:
+        snapshot.toolVersion,
+
+      snapshot_schema_version:
+        snapshot.schemaVersion,
+
+      file_name:
+        snapshot.fileIdentity.name,
+
+      snapshot_captured_at_iso:
+        snapshot.capturedAtIso,
+
+      arena_center_x_px:
+        arena?.centerX ?? null,
+
+      arena_center_y_px:
+        arena?.centerY ?? null,
+
+      platform_radius_px:
+        arena
+          ?.platformRadiusPixels ??
+        null,
+
+      tracking_margin_px:
+        arena
+          ?.trackingMarginPixels ??
+        null,
+
+      platform_diameter_cm:
+        arena
+          ?.platformDiameterCm ??
+        null,
+
+      hole_count:
+        holes?.holeCount ??
+        null,
+
+      hole_roi_radius_px:
+        holes
+          ?.holeRadiusPixels ??
+        null,
+
+      target_hole_index_0based:
+        holes
+          ?.targetHoleIndex ??
+        null,
+
+      target_hole_number_1based:
+        holes
+          ? holes.targetHoleIndex + 1
+          : null,
+
+      manually_adjusted_holes:
+        holes
+          ? holes.holes.filter(
+              (hole) =>
+                hole.manuallyAdjusted,
+            ).length
+          : null,
+
+      segmentation_difference_threshold:
+        segmentation
+          .differenceThreshold,
+
+      segmentation_min_component_area_px:
+        segmentation
+          .minimumComponentAreaPixels,
+
+      trajectory_median_window_s:
+        smoothing
+          .medianWindowSeconds,
+
+      trajectory_mean_window_s:
+        smoothing
+          .meanWindowSeconds,
+
+      trajectory_max_gap_s:
+        smoothing
+          .maxGapSeconds,
+
+      outlier_rejection_enabled:
+        outlier.enabled,
+
+      outlier_max_jump_speed_px_s:
+        outlier
+          .maximumJumpSpeedPixelsPerSecond,
+
+      orientation_motion_lookback_s:
+        orientation
+          .motionLookbackSeconds,
+
+      orientation_min_directional_speed_px_s:
+        orientation
+          .minimumDirectionalSpeedPixelsPerSecond,
+
+      orientation_min_motion_alignment:
+        orientation
+          .minimumMotionAlignment,
+
+      orientation_max_continuity_gap_s:
+        orientation
+          .maximumContinuityGapSeconds,
+
+      orientation_min_continuity_alignment:
+        orientation
+          .minimumContinuityAlignment,
+
+      orientation_min_shape_confidence:
+        orientation
+          .minimumShapeConfidence,
+
+      investigation_entry_margin_px:
+        investigation
+          .entryMarginPixels,
+
+      investigation_sustain_margin_px:
+        investigation
+          .sustainMarginPixels,
+
+      investigation_min_dwell_s:
+        investigation
+          .minimumDwellSeconds,
+
+      investigation_max_interruption_s:
+        investigation
+          .maximumInterruptionSeconds,
+
+      investigation_min_head_hole_alignment:
+        investigation
+          .minimumHeadHoleAlignment,
+
+      escape_min_terminal_absence_s:
+        escape
+          .minimumTerminalAbsenceSeconds,
+
+      escape_lookback_s:
+        escape
+          .escapeLookbackSeconds,
+
+      escape_proximity_margin_px:
+        escape
+          .escapeProximityMarginPixels,
+
+      escape_max_terminal_body_area_fraction:
+        escape
+          .maximumTerminalBodyAreaFraction,
+
+      escape_min_terminal_collapse_s:
+        escape
+          .minimumTerminalCollapseSeconds,
+
+      escape_max_s_from_target_end_to_disappearance:
+        escape
+          .maximumSecondsFromTargetEndToDisappearance,
+
+      escape_max_s_from_target_end_to_recording_end:
+        escape
+          .maximumSecondsFromTargetEndToRecordingEnd,
+
+      strategy_max_direct_primary_errors:
+        strategy
+          .maxDirectPrimaryErrors,
+
+      strategy_max_direct_unique_incorrect_holes:
+        strategy
+          .maxDirectUniqueIncorrectHoles,
+
+      strategy_max_direct_incorrect_hole_distance:
+        strategy
+          .maxDirectIncorrectHoleDistance,
+
+      strategy_min_direct_path_efficiency:
+        strategy
+          .minimumDirectPathEfficiency,
+
+      strategy_min_serial_adjacent_transition_fraction:
+        strategy
+          .minimumSerialAdjacentTransitionFraction,
+
+      strategy_min_serial_directional_consistency:
+        strategy
+          .minimumSerialDirectionalConsistency,
+
+      strategy_max_serial_direction_reversal_fraction:
+        strategy
+          .maximumSerialDirectionReversalFraction,
+
+      strategy_min_serial_perimeter_time_fraction:
+        strategy
+          .minimumSerialPerimeterTimeFraction,
+
+      strategy_perimeter_radius_fraction:
+        strategy
+          .perimeterRadiusFraction,
+
+      strategy_min_transitions_for_serial:
+        strategy
+          .minimumTransitionsForSerial,
+    });
+  }
+
+  return rows;
+}
 function csvCellText(
   value:
     CsvCell,
@@ -1799,6 +2110,316 @@ function downloadCsv(
         url,
       );
     },
+    0,
+  );
+}
+async function downloadAnalysisWorkbook(
+  filename: string,
+  trialRows: CsvRow[],
+  eventRows: CsvRow[],
+  parameterRows: CsvRow[],
+) {
+  const {
+    Workbook,
+  } = await import(
+    'exceljs'
+  );
+
+  const workbook =
+    new Workbook();
+
+  workbook.creator =
+    'Barnes Maze Analyzer';
+
+  workbook.subject =
+    'Barnes maze behavioral analysis';
+
+  workbook.title =
+    'Barnes Maze Analysis Results';
+
+  workbook.created =
+    new Date();
+
+  function addDataSheet(
+    name: string,
+    columns: readonly string[],
+    rows: CsvRow[],
+  ) {
+    const worksheet =
+      workbook.addWorksheet(
+        name,
+        {
+          views: [
+            {
+              state: 'frozen',
+              ySplit: 1,
+            },
+          ],
+        },
+      );
+
+    worksheet.columns =
+      columns.map(
+        (column) => ({
+          header: column,
+          key: column,
+
+          width:
+            Math.min(
+              38,
+              Math.max(
+                12,
+                column.length + 2,
+              ),
+            ),
+        }),
+      );
+
+    for (const row of rows) {
+      worksheet.addRow(
+        row,
+      );
+    }
+
+    worksheet.autoFilter = {
+      from: {
+        row: 1,
+        column: 1,
+      },
+
+      to: {
+        row: 1,
+        column:
+          columns.length,
+      },
+    };
+
+    const header =
+      worksheet.getRow(1);
+
+    header.font = {
+      bold: true,
+    };
+
+    header.alignment = {
+      vertical: 'middle',
+      wrapText: true,
+    };
+
+    header.height = 32;
+
+    worksheet.eachRow(
+      (
+        row,
+        rowNumber,
+      ) => {
+        if (
+          rowNumber === 1
+        ) {
+          return;
+        }
+
+        row.alignment = {
+          vertical: 'top',
+        };
+      },
+    );
+
+    for (
+      let index = 0;
+      index < columns.length;
+      index += 1
+    ) {
+      const name =
+        columns[index];
+
+      const column =
+        worksheet.getColumn(
+          index + 1,
+        );
+
+      if (
+        name.endsWith(
+          '_fraction',
+        ) ||
+        name.endsWith(
+          '_confidence',
+        ) ||
+        name.endsWith(
+          '_efficiency',
+        )
+      ) {
+        column.numFmt =
+          '0.0000';
+      } else if (
+        name.endsWith('_s') ||
+        name.endsWith('_cm') ||
+        name.endsWith(
+          '_cm_s',
+        ) ||
+        name.endsWith(
+          '_px_s',
+        )
+      ) {
+        column.numFmt =
+          '0.000';
+      }
+    }
+
+    return worksheet;
+  }
+
+  addDataSheet(
+    'Trial Summary',
+    TRIAL_SUMMARY_COLUMNS,
+    trialRows,
+  );
+
+  addDataSheet(
+    'Investigation Events',
+    INVESTIGATION_EVENT_COLUMNS,
+    eventRows,
+  );
+
+  addDataSheet(
+    'Analysis Parameters',
+    ANALYSIS_PARAMETER_COLUMNS,
+    parameterRows,
+  );
+
+  const about =
+    workbook.addWorksheet(
+      'About',
+    );
+
+  const exportedAtIso =
+    new Date().toISOString();
+
+  const aboutRows: Array<
+    [string,string]
+  > = [
+    [
+      'Workbook',
+      'Barnes Maze Analyzer results',
+    ],
+    [
+      'Tool version',
+      TOOL_VERSION,
+    ],
+    [
+      'Exported at',
+      exportedAtIso,
+    ],
+    [
+      'Trial Summary',
+      'One row per captured trial.',
+    ],
+    [
+      'Investigation Events',
+      'Automatic detections are retained even when rejected. Analysis fields describe the currently included reviewed event. Manual-added events have blank automatic-evidence fields.',
+    ],
+    [
+      'Analysis Parameters',
+      'Per-trial calibration and analysis thresholds captured with the result snapshot.',
+    ],
+    [
+      'Hole numbering',
+      'Fields ending in _index_0based are internal zero-based indices. Fields ending in _number_1based are user-facing hole numbers.',
+    ],
+    [
+      'Blank cells',
+      'Blank means unavailable or not applicable. Blank numeric cells must not be interpreted as zero.',
+    ],
+    [
+      'Review status',
+      'Check snapshot_review_status and primary_result_review_status before treating a trial as fully reviewed.',
+    ],
+    [
+      'Trajectory analysis duration',
+      'trajectory_analysis_duration_s is the duration represented by the analyzed trajectory, not necessarily the full source recording duration.',
+    ],
+    [
+      'Source data',
+      'Video processing occurs locally in the browser. This workbook contains captured analysis results, not source video frames.',
+    ],
+  ];
+
+  about.addRows(
+    aboutRows,
+  );
+
+  about.getColumn(1).width =
+    30;
+
+  about.getColumn(2).width =
+    90;
+
+  about.getColumn(1).font = {
+    bold: true,
+  };
+
+  about.getColumn(2).alignment = {
+    vertical: 'top',
+    wrapText: true,
+  };
+
+  /*
+   * writeBuffer() may return a Node-compatible
+   * Buffer type in the package typings.
+   *
+   * Uint8Array.from() creates a browser-owned
+   * byte array that is unambiguously safe as a
+   * BlobPart.
+   */
+  const buffer =
+    await workbook.xlsx
+      .writeBuffer();
+
+  const bytes =
+    Uint8Array.from(
+      buffer as ArrayLike<number>,
+    );
+
+  const blob =
+    new Blob(
+      [bytes],
+      {
+        type:
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      },
+    );
+
+  const url =
+    URL.createObjectURL(
+      blob,
+    );
+
+  const anchor =
+    document.createElement(
+      'a',
+    );
+
+  anchor.href =
+    url;
+
+  anchor.download =
+    filename;
+
+  anchor.style.display =
+    'none';
+
+  document.body.appendChild(
+    anchor,
+  );
+
+  anchor.click();
+  anchor.remove();
+
+  window.setTimeout(
+    () =>
+      URL.revokeObjectURL(
+        url,
+      ),
     0,
   );
 }
@@ -5596,13 +6217,68 @@ const investigationEventRows =
       batchAnalysisSnapshots,
     ],
   );
-
+const analysisParameterRows =
+  useMemo(
+    () =>
+      buildAnalysisParameterRows(
+        batchItems,
+        batchAnalysisSnapshots,
+      ),
+    [
+      batchItems,
+      batchAnalysisSnapshots,
+    ],
+  );
 const capturedTrialCount =
   trialSummaryRows.length;
 
 const capturedEventCount =
   investigationEventRows
     .length;
+  
+const [
+  xlsxExportBusy,
+  setXlsxExportBusy,
+] = useState(false);
+
+const [
+  xlsxExportError,
+  setXlsxExportError,
+] = useState<
+  string | null
+>(null);
+async function handleDownloadXlsx() {
+  if (
+    capturedTrialCount === 0 ||
+    batchRunState.running ||
+    xlsxExportBusy
+  ) {
+    return;
+  }
+
+  setXlsxExportBusy(true);
+  setXlsxExportError(null);
+
+  try {
+    await downloadAnalysisWorkbook(
+      'barnes_maze_analysis.xlsx',
+      trialSummaryRows,
+      investigationEventRows,
+      analysisParameterRows,
+    );
+  } catch (cause) {
+    const message =
+      cause instanceof Error
+        ? cause.message
+        : String(cause);
+
+    setXlsxExportError(
+      message,
+    );
+  } finally {
+    setXlsxExportBusy(false);
+  }
+}
 function clearBatchAnalysisSnapshot(
   id: string,
 ) {
@@ -7136,8 +7812,44 @@ disabled={
       >
         Download investigation events CSV
       </button>
+      <button
+  type="button"
+  disabled={
+    capturedTrialCount ===
+      0 ||
+    batchRunState.running ||
+    xlsxExportBusy
+  }
+  aria-label={
+    'Download complete Barnes maze analysis workbook in Excel XLSX format'
+  }
+  onClick={
+    handleDownloadXlsx
+  }
+>
+  {
+    xlsxExportBusy
+      ? 'Building XLSX workbook…'
+      : 'Download analysis workbook XLSX'
+  }
+</button>
     </div>
+{xlsxExportBusy && (
+  <p
+    role="status"
+    aria-live="polite"
+  >
+    Building Excel workbook from
+    captured analysis results.
+  </p>
+)}
 
+{xlsxExportError && (
+  <p role="alert">
+    XLSX export failed:{' '}
+    {xlsxExportError}
+  </p>
+)}
     {batchRunState.running && (
       <p role="status">
         CSV export is available after the
@@ -7301,15 +8013,174 @@ disabled={
         ))}
     </div>
     {calibrationFrame && (
-      <ArenaCalibrationView
-        frame={calibrationFrame}
-        calibration={arenaCalibration}
-        onCalibrationChange={(calibration) => {
-          setArenaCalibration(calibration);
-          setHoleGeometry(null);
-          setBodyTrack(null);
-        }}
-      />
+<ArenaCalibrationView
+  frame={calibrationFrame}
+  calibration={arenaCalibration}
+onCalibrationChange={(calibration) => {
+  const previous =
+    arenaCalibration;
+
+  /*
+   * A full reset removes the geometric
+   * foundation used by hole calibration,
+   * tracking, events, escape detection,
+   * trajectory metrics, and review.
+   */
+  if (
+    previous !== null &&
+    calibration === null
+  ) {
+    const confirmed =
+      window.confirm(
+        [
+          'Reset arena calibration?',
+          '',
+          'Changing the arena calibration changes the foundation of this analysis.',
+          '',
+          'Hole calibration, tracking, behavioral events, escape detection, metrics, and manual review will need to be recomputed and reviewed.',
+          '',
+          'This action cannot preserve the current analyzed results.',
+        ].join('\n'),
+      );
+
+    if (!confirmed) {
+      return;
+    }
+  }
+    /*
+     * Hole positions depend on the arena's
+     * image-space geometry:
+     *
+     * - image dimensions
+     * - center
+     * - platform radius
+     *
+     * Physical diameter is only a px → cm
+     * scale and must NOT invalidate hole
+     * calibration.
+     */
+    const holeGeometryChanged =
+      previous === null ||
+      calibration === null
+        ? previous !== calibration
+        : (
+            previous.imageWidth !==
+              calibration.imageWidth ||
+
+            previous.imageHeight !==
+              calibration.imageHeight ||
+
+            previous.centerX !==
+              calibration.centerX ||
+
+            previous.centerY !==
+              calibration.centerY ||
+
+            previous.platformRadiusPixels !==
+              calibration.platformRadiusPixels
+          );
+
+    /*
+     * Tracking also depends on the tracking
+     * margin. Changing only the physical
+     * diameter does not alter pixel-space
+     * tracking.
+     */
+    const trackingGeometryChanged =
+      holeGeometryChanged ||
+      (
+        previous !== null &&
+        calibration !== null &&
+        previous.trackingMarginPixels !==
+          calibration.trackingMarginPixels
+      );
+
+    /*
+     * Physical diameter changes quantitative
+     * physical-unit output, so any existing
+     * result snapshot should be refreshed.
+     *
+     * If BodyTrack remains valid, the normal
+     * snapshot effect will immediately capture
+     * updated cm-based results.
+     */
+    const physicalScaleChanged =
+      previous !== null &&
+      calibration !== null &&
+      previous.platformDiameterCm !==
+        calibration.platformDiameterCm;
+
+    setArenaCalibration(
+      calibration,
+    );
+
+    if (
+      selectedFile &&
+      (
+        trackingGeometryChanged ||
+        physicalScaleChanged
+      )
+    ) {
+      clearBatchAnalysisSnapshot(
+        batchItemId(
+          selectedFile,
+        ),
+      );
+    }
+
+    if (
+      holeGeometryChanged
+    ) {
+      setHoleGeometry(
+        null,
+      );
+    }
+
+    if (
+  trackingGeometryChanged
+) {
+  /*
+   * Any image-space or tracking-mask change
+   * invalidates the derived tracking result
+   * and all review decisions based on it.
+   *
+   * Do not allow old annotations to silently
+   * attach to a newly computed analysis.
+   */
+  setBodyTrack(
+    null,
+  );
+
+  setTrackingProgress(
+    null,
+  );
+
+  setHoleEventReviewDecisions(
+    {},
+  );
+
+  setManualHoleEventAdditions(
+    [],
+  );
+
+  setTrialStartOverride(
+    null,
+  );
+
+  setManualTrackPointCorrections(
+    {},
+  );
+
+  setEscapeReviewDecision(
+    null,
+  );
+
+  setSearchStrategyOverride(
+    null,
+  );
+}
+  }}
+/>
     )}
     {calibrationFrame &&
       arenaCalibration && (
@@ -7325,12 +8196,41 @@ disabled={
     }
   />
 )}
-{result?.background && arenaCalibration && (
+{result?.background &&
+ arenaCalibration && (
   <HoleCalibrationView
-    background={result.background}
-    arena={arenaCalibration}
-    geometry={holeGeometry}
-    onGeometryChange={setHoleGeometry}
+    /*
+     * Remount the selector whenever the
+     * image-space arena geometry changes.
+     *
+     * This intentionally does NOT include
+     * tracking margin or physical diameter,
+     * because those changes do not invalidate
+     * calibrated hole positions.
+     */
+    key={[
+      arenaCalibration.imageWidth,
+      arenaCalibration.imageHeight,
+      arenaCalibration.centerX,
+      arenaCalibration.centerY,
+      arenaCalibration.platformRadiusPixels,
+    ].join(':')}
+
+    background={
+      result.background
+    }
+
+    arena={
+      arenaCalibration
+    }
+
+    geometry={
+      holeGeometry
+    }
+
+    onGeometryChange={
+      setHoleGeometry
+    }
   />
 )}
 {calibrationFrame &&
