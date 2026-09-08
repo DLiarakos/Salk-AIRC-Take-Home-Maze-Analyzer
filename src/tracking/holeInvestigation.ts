@@ -1,12 +1,18 @@
+/**
+ * Automatic detection of directed hole-investigation bouts from oriented body tracking.
+ *
+ * Inputs:
+ * - Oriented BodyTrack, TrialWindow, HoleGeometry, and HoleInvestigationSettings.
+ *
+ * Outputs:
+ * - HoleInvestigationResult containing detector evidence, discrete investigation events, and QC counts.
+ *
+ * Main function:
+ * - detectHoleInvestigations() classifies per-frame nose/heading evidence and applies the entry/sustain/interruption state machine.
+ */
 import type {
-  BodyTrack,
-  BodyTrackPoint,
-  HoleGeometry,
-  HoleInvestigationEvidence,
-  HoleInvestigationEvent,
-  HoleInvestigationResult,
-  HoleInvestigationSettings,
-  TrialWindow,
+  BodyTrack, BodyTrackPoint, HoleGeometry, HoleInvestigationEvidence, HoleInvestigationEvent, HoleInvestigationResult,
+  HoleInvestigationSettings, TrialWindow,
 } from '../models/tracking';
 
 function pointSeconds(point: BodyTrackPoint): number {
@@ -18,7 +24,8 @@ function ptsKey(point: BodyTrackPoint): string {
 }
 
 function orientationScore(point: BodyTrackPoint): number {
-  if (point.noseX === null || point.noseY === null) return -1;
+  if (point.noseX === null || point.noseY === null)
+    return -1;
   return point.orientationConfidence ?? 0;
 }
 
@@ -30,46 +37,28 @@ function uniqueTrialPoints(
   sourceCount: number;
   duplicateCount: number;
 } {
-  const endIndex =
-    trialWindow.endPresentationIndex ??
+  const endIndex = trialWindow.endPresentationIndex ??
     Number.POSITIVE_INFINITY;
-
-  const source = track.points.filter(
-    (point) =>
-      point.presentationIndex >=
-        trialWindow.startPresentationIndex &&
-      point.presentationIndex <= endIndex,
-  );
-
-  const byPts =
-    new Map<string,BodyTrackPoint>();
-
+  const source = track.points.filter((point) => point.presentationIndex >=
+    trialWindow.startPresentationIndex &&
+    point.presentationIndex <= endIndex);
+  const byPts = new Map<string, BodyTrackPoint>();
   for (const point of source) {
     const key = ptsKey(point);
     const existing = byPts.get(key);
-
-    if (
-      !existing ||
+    if (!existing ||
       orientationScore(point) >
-        orientationScore(existing)
-    ) {
-      byPts.set(key,point);
+      orientationScore(existing)) {
+      byPts.set(key, point);
     }
   }
-
-  const points =
-    [...byPts.values()].sort(
-      (a,b) =>
-        pointSeconds(a) - pointSeconds(b) ||
-        a.presentationIndex -
-          b.presentationIndex,
-    );
-
+  const points = [...byPts.values()].sort((a, b) => pointSeconds(a) - pointSeconds(b) ||
+    a.presentationIndex -
+    b.presentationIndex);
   return {
     points,
     sourceCount: source.length,
-    duplicateCount:
-      source.length - points.length,
+    duplicateCount: source.length - points.length,
   };
 }
 
@@ -79,13 +68,10 @@ function classifyEvidence(
   settings: HoleInvestigationSettings,
 ): HoleInvestigationEvidence {
   const timeSeconds = pointSeconds(point);
-
-  if (
-    point.x === null ||
+  if (point.x === null ||
     point.y === null ||
     point.noseX === null ||
-    point.noseY === null
-  ) {
+    point.noseY === null) {
     return {
       presentationIndex: point.presentationIndex,
       timeSeconds,
@@ -99,77 +85,46 @@ function classifyEvidence(
       withinSustainRadius: false,
     };
   }
-
   let nearestHoleIndex: number | null = null;
   let nearestDistance = Number.POSITIVE_INFINITY;
   let nearestAlignment: number | null = null;
   let nearestWithinEntryRadius = false;
-
   const headX = point.noseX - point.x;
   const headY = point.noseY - point.y;
-  const headLength = Math.hypot(headX,headY);
-
+  const headLength = Math.hypot(headX, headY);
   for (const hole of geometry.holes) {
-    const entryRadius =
-      hole.radiusPixels +
+    const entryRadius = hole.radiusPixels +
       settings.entryMarginPixels;
-
     /*
      * Defensive Math.max ensures the outer radius
      * can never accidentally become smaller than
      * the inner trigger radius.
-     */
-    const sustainRadius =
-      hole.radiusPixels +
-      Math.max(
-        settings.sustainMarginPixels,
-        settings.entryMarginPixels,
-      );
-
-    const noseDistance =
-      Math.hypot(
-        point.noseX - hole.centerX,
-        point.noseY - hole.centerY,
-      );
-
+    */
+    const sustainRadius = hole.radiusPixels +
+      Math.max(settings.sustainMarginPixels, settings.entryMarginPixels);
+    const noseDistance = Math.hypot(point.noseX - hole.centerX, point.noseY - hole.centerY);
     /*
      * Outside the outer radius:
      * this hole is irrelevant for this observation.
-     */
+    */
     if (noseDistance > sustainRadius) {
       continue;
     }
-
     const holeX = hole.centerX - point.x;
     const holeY = hole.centerY - point.y;
-    const holeLength = Math.hypot(holeX,holeY);
-    if (
-      headLength === 0 ||
-      holeLength === 0
-    ) {
+    const holeLength = Math.hypot(holeX, holeY);
+    if (headLength === 0 ||
+      holeLength === 0) {
       continue;
     }
-
-    const alignment =
-      Math.max(
-        -1,
-        Math.min(
-          1,
-          (
-            headX * holeX +
-            headY * holeY
-          ) /
-          (
-            headLength *
-            holeLength
-          ),
-        ),
-      );
-
+    const alignment = Math.max(-1, Math.min(1, (headX * holeX +
+      headY * holeY) /
+      (headLength *
+        holeLength)));
     /*
      * If more than one sustain ROI contains the nose,
      * keep the nearest hole.
-     */
+    */
     if (noseDistance < nearestDistance) {
       nearestHoleIndex = hole.index;
       nearestDistance = noseDistance;
@@ -178,10 +133,9 @@ function classifyEvidence(
         noseDistance <= entryRadius;
     }
   }
-
   /*
    * Nose is outside every sustain ROI.
-   */
+  */
   if (nearestHoleIndex === null) {
     return {
       presentationIndex: point.presentationIndex,
@@ -196,16 +150,13 @@ function classifyEvidence(
       withinSustainRadius: false,
     };
   }
-
   /*
    * Nose is spatially near a hole but head direction
    * does not pass the investigation criterion.
-   */
-  if (
-    nearestAlignment === null ||
+  */
+  if (nearestAlignment === null ||
     nearestAlignment <
-      settings.minimumHeadHoleAlignment
-  ) {
+    settings.minimumHeadHoleAlignment) {
     return {
       presentationIndex: point.presentationIndex,
       timeSeconds,
@@ -215,18 +166,16 @@ function classifyEvidence(
       holeIndex: nearestHoleIndex,
       distancePixels: nearestDistance,
       headHoleAlignment: nearestAlignment,
-      withinEntryRadius:
-        nearestWithinEntryRadius,
+      withinEntryRadius: nearestWithinEntryRadius,
       withinSustainRadius: true,
     };
   }
-
   /*
    * Aligned and inside the outer sustain ROI.
    *
    * withinEntryRadius tells the event state machine
    * whether this observation may START an event.
-   */
+  */
   return {
     presentationIndex: point.presentationIndex,
     timeSeconds,
@@ -236,23 +185,16 @@ function classifyEvidence(
     holeIndex: nearestHoleIndex,
     distancePixels: nearestDistance,
     headHoleAlignment: nearestAlignment,
-    withinEntryRadius:
-      nearestWithinEntryRadius,
+    withinEntryRadius: nearestWithinEntryRadius,
     withinSustainRadius: true,
   };
 }
 
 interface CandidateEvent {
   holeIndex: number;
-
-  first:
-    HoleInvestigationEvidence;
-
-  lastPositive:
-    HoleInvestigationEvidence;
-
+  first: HoleInvestigationEvidence;
+  lastPositive: HoleInvestigationEvidence;
   positiveObservationCount: number;
-
   minimumDistancePixels: number;
   closestNoseX: number;
   closestNoseY: number;
@@ -264,288 +206,163 @@ export function detectHoleInvestigations(
   trialWindow: TrialWindow,
   settings: HoleInvestigationSettings,
 ): HoleInvestigationResult {
-  const unique =
-    uniqueTrialPoints(
-      track,
-      trialWindow,
-    );
-    
-  const evidence =
-    unique.points.map(
-      (point) =>
-        classifyEvidence(
-          point,
-          geometry,
-          settings,
-        ),
-    );
-const proximityPositiveObservations =
-  evidence.filter(
-    (item) =>
-      item.state === 'investigating' ||
-      item.state === 'near-but-misaligned',
-  ).length;
-
-const alignmentRejectedObservations =
-  evidence.filter(
-    (item) =>
-      item.state ===
-        'near-but-misaligned',
-  ).length;
-const entryTriggerObservations =
-  evidence.filter(
-    (item) =>
-      item.state === 'investigating' &&
-      item.withinEntryRadius,
-  ).length;
-
-  const events:
-    HoleInvestigationEvent[] = [];
-
-  let candidate:
-    CandidateEvent | null = null;
-
+  const unique = uniqueTrialPoints(track, trialWindow);
+  const evidence = unique.points.map((point) => classifyEvidence(point, geometry, settings));
+  const proximityPositiveObservations = evidence.filter((item) => item.state === 'investigating' ||
+    item.state === 'near-but-misaligned').length;
+  const alignmentRejectedObservations = evidence.filter((item) => item.state ===
+    'near-but-misaligned').length;
+  const entryTriggerObservations = evidence.filter((item) => item.state === 'investigating' &&
+    item.withinEntryRadius).length;
+  const events: HoleInvestigationEvent[] = [];
+  let candidate: CandidateEvent | null = null;
   let candidateEventCount = 0;
   let rejectedShortEventCount = 0;
-
   const epsilon = 1e-9;
-
-function createCandidate(
-  observation: HoleInvestigationEvidence,
-): CandidateEvent | null {
-  if (
-    !observation.withinEntryRadius ||
-    observation.holeIndex === null ||
-    observation.distancePixels === null ||
-    observation.noseX === null ||
-    observation.noseY === null
-  ) {
-    return null;
-  }
-
-  return {
-    holeIndex: observation.holeIndex,
-    first: observation,
-    lastPositive: observation,
-    positiveObservationCount: 1,
-    minimumDistancePixels: observation.distancePixels,
-    closestNoseX: observation.noseX,
-    closestNoseY: observation.noseY,
-  };
-}
-function finishCandidate(
-  current: CandidateEvent | null,
-) {
-  if (current === null) return;
-
-  candidateEventCount += 1;
-
-  const durationSeconds =
-    current.lastPositive.timeSeconds -
-    current.first.timeSeconds;
-
-  if (
-    durationSeconds + epsilon >=
-    settings.minimumDwellSeconds
-  ) {
-    const hole =
-      geometry.holes.find(
-        (item) =>
-          item.index === current.holeIndex,
-      );
-
-    events.push({
-      eventIndex: events.length,
-      holeIndex: current.holeIndex,
-      isTarget: hole?.isTarget ?? false,
-
-      startPresentationIndex:
-        current.first.presentationIndex,
-
-      endPresentationIndex:
-        current.lastPositive.presentationIndex,
-
-      startTimeSeconds:
-        current.first.timeSeconds,
-
-      endTimeSeconds:
-        current.lastPositive.timeSeconds,
-
-      durationSeconds,
-
-      positiveObservationCount:
-        current.positiveObservationCount,
-
-      minimumNoseDistancePixels:
-        current.minimumDistancePixels,
-
-      closestNoseX:
-        current.closestNoseX,
-
-      closestNoseY:
-        current.closestNoseY,
-    });
-  } else {
-    rejectedShortEventCount += 1;
-  }
-}
-
-for (const observation of evidence) {
-  const isPositive =
-    observation.state === 'investigating' &&
-    observation.holeIndex !== null;
-
-  /*
-   * NO ACTIVE EVENT:
-   * entering only the outer sustain zone cannot
-   * start an investigation.
-   */
-  if (candidate === null) {
-    if (
-      isPositive &&
-      observation.withinEntryRadius
-    ) {
-      candidate =
-        createCandidate(observation);
+  function createCandidate(observation: HoleInvestigationEvidence): CandidateEvent | null {
+    if (!observation.withinEntryRadius ||
+      observation.holeIndex === null ||
+      observation.distancePixels === null ||
+      observation.noseX === null ||
+      observation.noseY === null) {
+      return null;
     }
-
-    continue;
+    return {
+      holeIndex: observation.holeIndex,
+      first: observation,
+      lastPositive: observation,
+      positiveObservationCount: 1,
+      minimumDistancePixels: observation.distancePixels,
+      closestNoseX: observation.noseX,
+      closestNoseY: observation.noseY,
+    };
   }
-
-  /*
-   * ACTIVE EVENT, SAME HOLE:
-   * once triggered, aligned observations anywhere
-   * inside the sustain radius may keep it alive.
-   */
-  if (
-    isPositive &&
-    observation.holeIndex ===
-      candidate.holeIndex
-  ) {
-    const gap =
-      observation.timeSeconds -
-      candidate.lastPositive.timeSeconds;
-
-    if (
-      gap >
-      settings.maximumInterruptionSeconds +
-        epsilon
-    ) {
-      finishCandidate(candidate);
-      candidate = null;
-
-      if (observation.withinEntryRadius) {
+  function finishCandidate(current: CandidateEvent | null) {
+    if (current === null)
+      return;
+    candidateEventCount += 1;
+    const durationSeconds = current.lastPositive.timeSeconds -
+      current.first.timeSeconds;
+    if (durationSeconds + epsilon >=
+      settings.minimumDwellSeconds) {
+      const hole = geometry.holes.find((item) => item.index === current.holeIndex);
+      events.push({
+        eventIndex: events.length,
+        holeIndex: current.holeIndex,
+        isTarget: hole?.isTarget ?? false,
+        startPresentationIndex: current.first.presentationIndex,
+        endPresentationIndex: current.lastPositive.presentationIndex,
+        startTimeSeconds: current.first.timeSeconds,
+        endTimeSeconds: current.lastPositive.timeSeconds,
+        durationSeconds,
+        positiveObservationCount: current.positiveObservationCount,
+        minimumNoseDistancePixels: current.minimumDistancePixels,
+        closestNoseX: current.closestNoseX,
+        closestNoseY: current.closestNoseY,
+      });
+    }
+    else {
+      rejectedShortEventCount += 1;
+    }
+  }
+  for (const observation of evidence) {
+    const isPositive = observation.state === 'investigating' &&
+      observation.holeIndex !== null;
+    /*
+     * NO ACTIVE EVENT:
+     * entering only the outer sustain zone cannot
+     * start an investigation.
+    */
+    if (candidate === null) {
+      if (isPositive &&
+        observation.withinEntryRadius) {
         candidate =
           createCandidate(observation);
       }
-
       continue;
     }
-
-    candidate.lastPositive =
-      observation;
-
-    candidate.positiveObservationCount += 1;
-
-    if (
-      observation.distancePixels !== null &&
-      observation.distancePixels <
-        candidate.minimumDistancePixels
-    ) {
-      candidate.minimumDistancePixels =
-        observation.distancePixels;
-
-      if (
-        observation.noseX !== null &&
-        observation.noseY !== null
-      ) {
-        candidate.closestNoseX =
-          observation.noseX;
-
-        candidate.closestNoseY =
-          observation.noseY;
+    /*
+     * ACTIVE EVENT, SAME HOLE:
+     * once triggered, aligned observations anywhere
+     * inside the sustain radius may keep it alive.
+    */
+    if (isPositive &&
+      observation.holeIndex ===
+      candidate.holeIndex) {
+      const gap = observation.timeSeconds -
+        candidate.lastPositive.timeSeconds;
+      if (gap >
+        settings.maximumInterruptionSeconds +
+        epsilon) {
+        finishCandidate(candidate);
+        candidate = null;
+        if (observation.withinEntryRadius) {
+          candidate =
+            createCandidate(observation);
+        }
+        continue;
       }
+      candidate.lastPositive =
+        observation;
+      candidate.positiveObservationCount += 1;
+      if (observation.distancePixels !== null &&
+        observation.distancePixels <
+        candidate.minimumDistancePixels) {
+        candidate.minimumDistancePixels =
+          observation.distancePixels;
+        if (observation.noseX !== null &&
+          observation.noseY !== null) {
+          candidate.closestNoseX =
+            observation.noseX;
+          candidate.closestNoseY =
+            observation.noseY;
+        }
+      }
+      continue;
     }
-
-    continue;
-  }
-
-  /*
-   * ACTIVE EVENT, DIFFERENT HOLE:
-   * the new hole takes over only after its inner
-   * entry radius has been reached.
-   */
-  if (
-    isPositive &&
-    observation.holeIndex !==
+    /*
+     * ACTIVE EVENT, DIFFERENT HOLE:
+     * the new hole takes over only after its inner
+     * entry radius has been reached.
+    */
+    if (isPositive &&
+      observation.holeIndex !==
       candidate.holeIndex &&
-    observation.withinEntryRadius
-  ) {
-    finishCandidate(candidate);
-
-    candidate =
-      createCandidate(observation);
-
-    continue;
+      observation.withinEntryRadius) {
+      finishCandidate(candidate);
+      candidate =
+        createCandidate(observation);
+      continue;
+    }
+    /*
+     * Outside, unknown, misaligned, or sustain-only
+     * evidence at another hole counts as interruption.
+    */
+    const interruption = observation.timeSeconds -
+      candidate.lastPositive.timeSeconds;
+    if (interruption >
+      settings.maximumInterruptionSeconds +
+      epsilon) {
+      finishCandidate(candidate);
+      candidate = null;
+    }
   }
-
   /*
-   * Outside, unknown, misaligned, or sustain-only
-   * evidence at another hole counts as interruption.
-   */
-  const interruption =
-    observation.timeSeconds -
-    candidate.lastPositive.timeSeconds;
-
-  if (
-    interruption >
-    settings.maximumInterruptionSeconds +
-      epsilon
-  ) {
-    finishCandidate(candidate);
-    candidate = null;
-  }
-}
-
-/*
- * Flush one event that remains active at trial end.
- */
-finishCandidate(candidate);
-candidate = null;
-
-  const usableNoseObservations =
-    evidence.filter(
-      (item) =>
-        item.state !== 'unknown',
-    ).length;
-
-  const unknownNoseObservations =
-    evidence.filter(
-      (item) =>
-        item.state === 'unknown',
-    ).length;
-
-  const positiveEvidenceObservations =
-    evidence.filter(
-      (item) =>
-        item.state ===
-        'investigating',
-    ).length;
-
+   * Flush one event that remains active at trial end.
+  */
+  finishCandidate(candidate);
+  candidate = null;
+  const usableNoseObservations = evidence.filter((item) => item.state !== 'unknown').length;
+  const unknownNoseObservations = evidence.filter((item) => item.state === 'unknown').length;
+  const positiveEvidenceObservations = evidence.filter((item) => item.state ===
+    'investigating').length;
   return {
     evidence,
     events,
-
     qc: {
-      trialObservationCount:
-        unique.sourceCount,
-
-      uniqueTimestampCount:
-        unique.points.length,
-
-      duplicatePtsCollapsed:
-        unique.duplicateCount,
-
+      trialObservationCount: unique.sourceCount,
+      uniqueTimestampCount: unique.points.length,
+      duplicatePtsCollapsed: unique.duplicateCount,
       usableNoseObservations,
       unknownNoseObservations,
       positiveEvidenceObservations,
@@ -553,12 +370,9 @@ candidate = null;
       alignmentRejectedObservations,
       entryTriggerObservations,
       candidateEventCount,
-      acceptedEventCount:
-        events.length,
-
+      acceptedEventCount: events.length,
       rejectedShortEventCount,
     },
-
     settings,
   };
 }

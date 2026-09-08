@@ -1,0 +1,50 @@
+After core export, the highest-value remaining product additions are
+
+The biggest remaining scoring opportunities are:
+
+Tracking-failure timeline. You already calculate missing runs, including count and longest missing sequence. A simple accessible timeline/list showing where those failures occur would directly satisfy the assignment's request to show where failures cluster.
+
+Hole-visit raster. This would be a very efficient visualization addition because you already have exact investigation start/end times and hole identities. The assignment explicitly names a hole-visit raster.
+
+Occupancy heat map. Also explicitly requested and useful scientifically, but somewhat more work than the raster.
+
+Trial metadata. animal_id, day/trial, cohort/group are needed before meaningful learning curves or cohort comparisons. I would add these after core export rather than block today's spreadsheet work.
+
+Accessibility from here onward
+
+For export UI, I would apply your rubric immediately rather than fixing it later. Buttons should be ordinary keyboard-focusable <button> elements with descriptive text such as:
+
+Download trial summary CSV
+Download investigation events CSV
+Download Excel workbook
+Download reloadable analysis file
+
+not generic Download buttons. Export readiness should use text (Captured, Needs tracking, etc.), never color alone. Tables should retain horizontally focusable scroll containers at 200% zoom, and no essential export/review operation should depend on hover or drag.
+
+One thing I would not do yet is spend time making the batch table prettier. Functionally it already communicates the state very well, and the rubric explicitly says CSS fashion is not the goal.
+
+So the next concrete implementation I recommend is:
+
+Build reusable trial-summary and investigation-event row generators from batchAnalysisSnapshots, then wire them to two accessible CSV download buttons.
+
+That gets us directly to one of the strongest remaining rubric/demo requirements
+
+Batch result snapshots
+        ↓
+Trial + event CSV export
+        ↓
+XLSX workbook
+        ↓
+Reloadable analysis JSON
+        ↓
+Consolidated results report
+        ↓
+Failure-run visualization
+        ↓
+Hole-visit raster / heatmap
+        ↓
+metadata/cohort polish
+        ↓
+calibration reuse / drag-drop
+        ↓
+final validation + packaging

@@ -1,4 +1,17 @@
-import type { FrameTiming,RationalTime } from './media';
+/**
+ * Core TypeScript data model for calibration, tracking, trajectory processing, event detection, review, and metrics.
+ *
+ * Inputs:
+ * - FrameTiming/RationalTime types from the media model; this module otherwise contains no runtime processing.
+ *
+ * Outputs:
+ * - Shared interfaces and settings objects passed between decoder, tracker, analysis modules, React components, and exports.
+ *
+ * Main definitions:
+ * - Frame/background/segmentation and body-track structures.
+ * - Arena/hole calibration, trial-window, orientation, trajectory, investigation, escape, quadrant, and strategy types.
+ */
+import type { FrameTiming, RationalTime } from './media';
 
 export interface GrayscaleStats {
   minimum: number;
@@ -10,24 +23,21 @@ export interface GrayscaleStats {
 export interface RepresentativeFrame {
   width: number;
   height: number;
-
   /**
    * One byte per pixel:
    * 0 = black
    * 255 = white
-   */
+  */
   pixels: Uint8Array;
-
   timing: FrameTiming;
-
   /**
    * Position in the WebCodecs output sequence.
-   * This is for preview/debugging only.
-   */
+   * Used only for preview and diagnostic display.
+  */
   decodedIndex: number;
-
   stats: GrayscaleStats;
 }
+
 export interface Point2D {
   x: number;
   y: number;
@@ -36,35 +46,32 @@ export interface Point2D {
 export interface ArenaCalibration {
   /**
    * Dimensions of the image this calibration belongs to.
-   */
+  */
   imageWidth: number;
   imageHeight: number;
-
   /**
    * Maze/platform center in image pixel coordinates.
-   */
+  */
   centerX: number;
   centerY: number;
-
   /**
    * Radius of the physical Barnes maze platform.
-   */
+  */
   platformRadiusPixels: number;
-
   /**
    * Extra pixels outside the platform retained for tracking.
    *
    * This is useful because the mouse can partially disappear
    * into holes at the rim.
-   */
+  */
   trackingMarginPixels: number;
-
   /**
    * Optional real-world platform diameter.
-   * Later used for pixels → centimeters conversion.
-   */
+   * Used for pixels → centimeters conversion.
+  */
   platformDiameterCm: number | null;
 }
+
 export interface BackgroundSample {
   decodedIndex: number;
   pixels: Uint8Array;
@@ -81,135 +88,103 @@ export interface SegmentationSettings {
   /**
    * Minimum amount by which a pixel must become
    * darker than the background to count as foreground.
-   */
+  */
   differenceThreshold: number;
-
   /**
    * Ignore connected foreground regions smaller
    * than this many pixels.
-   */
+  */
   minimumComponentAreaPixels: number;
 }
 
 export interface SegmentationResult {
   width: number;
   height: number;
-
   /**
    * background - current frame, clamped to 0–255.
-   */
+  */
   difference: Uint8Array;
-
   /**
    * 0 = background
    * 1 = candidate foreground
-   */
+  */
   foregroundMask: Uint8Array;
-
   foregroundPixelCount: number;
 }
+
 export interface ForegroundComponent {
   id: number;
-
   areaPixels: number;
-
   centroidX: number;
   centroidY: number;
-
   minX: number;
   minY: number;
   maxX: number;
   maxY: number;
-
   /**
    * Indices into the flattened width × height image.
-   */
+  */
   pixelIndices: number[];
 }
 
 export interface ComponentAnalysis {
   components: ForegroundComponent[];
-
   /**
    * Components meeting the configured minimum area.
-   */
+  */
   retainedComponents: ForegroundComponent[];
-
   /**
    * Largest retained component, if one exists.
-   *
-   * For the first prototype this is our mouse candidate.
-   */
-  largestComponent:
-    ForegroundComponent | null;
+   * This component is selected as the mouse-body candidate.
+  */
+  largestComponent: ForegroundComponent | null;
 }
-export type BodyVisibility =
-  | 'visible'
-  | 'partial'
-  | 'not-detected';
 
+export type BodyVisibility = 'visible' | 'partial' | 'not-detected';
 export interface BodyDetection {
   x: number;
   y: number;
-
   areaPixels: number;
-
   minX: number;
   minY: number;
   maxX: number;
   maxY: number;
-
   visibility: BodyVisibility;
-
   /**
    * Fraction of all retained foreground pixels
    * belonging to the selected body component.
-   */
+  */
   dominance: number;
 }
+
 export interface BodyTrackPoint {
   /**
    * Presentation-order frame number.
    * Diagnostic only — behavioral timing uses PTS.
-   */
+  */
   presentationIndex: number;
-
   /**
    * Exact MP4 presentation timestamp.
-   */
+  */
   pts: RationalTime;
-
   x: number | null;
   y: number | null;
-  
   axisX: number | null;
   axisY: number | null;
-
   candidateAX: number | null;
   candidateAY: number | null;
   candidateBX: number | null;
   candidateBY: number | null;
-
   shapeConfidence: number | null;
-
   noseX: number | null;
   noseY: number | null;
   rearX: number | null;
   rearY: number | null;
-
   orientationConfidence: number | null;
-
-  orientationMethod:
-  | 'motion'
-  | 'continuity'
-  | 'unresolved'
-  | 'not-detected';
-
+  orientationMethod: 'motion' | 'continuity' | 'unresolved' | 'not-detected';
   areaPixels: number | null;
   dominance: number | null;
-
   visibility: BodyVisibility;
-
   foregroundPixelCount: number;
   retainedComponentCount: number;
 }
@@ -217,69 +192,51 @@ export interface BodyTrackPoint {
 export interface BodyTrack {
   width: number;
   height: number;
-
   points: BodyTrackPoint[];
-
   detectedFrameCount: number;
   missingFrameCount: number;
 }
 
 export type ManualTrackPointCorrection =
   | {
-      presentationIndex: number;
-
-      kind: 'position';
-
-      x: number;
-      y: number;
-
-      note: string;
-
-      updatedAtIso: string;
-    }
+    presentationIndex: number;
+    kind: 'position';
+    x: number;
+    y: number;
+    note: string;
+    updatedAtIso: string;
+  }
   | {
-      presentationIndex: number;
+    presentationIndex: number;
+    kind: 'missing';
+    x: null;
+    y: null;
+    note: string;
+    updatedAtIso: string;
+  };
 
-      kind: 'missing';
-
-      x: null;
-      y: null;
-
-      note: string;
-
-      updatedAtIso: string;
-    };
-
-export type ManualTrackPointCorrectionMap =
-  Record<
-    string,
-    ManualTrackPointCorrection
-  >;
+export type ManualTrackPointCorrectionMap = Record<string, ManualTrackPointCorrection>;
 export interface TrialWindowSettings {
   /**
    * Mouse must remain detected for at least this
    * long before presence is considered real.
-   */
+  */
   minimumPresenceSeconds: number;
 }
 
 export interface TrialWindow {
   startPresentationIndex: number;
   startPts: RationalTime;
-
-  endPresentationIndex:
-    number | null;
-
-  endPts:
-    RationalTime | null;
+  endPresentationIndex: number | null;
+  endPts: RationalTime | null;
 }
+
 export interface TrialStartOverride {
   presentationIndex: number;
-
   note: string;
-
   updatedAtIso: string;
 }
+
 export interface TrajectorySmoothingSettings {
   medianWindowSeconds: number;
   meanWindowSeconds: number;
@@ -288,25 +245,20 @@ export interface TrajectorySmoothingSettings {
 
 export interface TrajectoryOutlierSettings {
   enabled: boolean;
-
-  maximumJumpSpeedPixelsPerSecond:
-    number;
+  maximumJumpSpeedPixelsPerSecond: number;
 }
 
 export interface AnalysisTrajectoryPoint {
   pts: RationalTime;
   timeSeconds: number;
-
   x: number;
   y: number;
-
   segmentId: number;
-
   /**
    * More than 1 means multiple observations
    * shared the exact same source PTS and were
    * collapsed into one temporal observation.
-   */
+  */
   sourceObservationCount: number;
 }
 
@@ -314,11 +266,9 @@ export interface TrajectoryQcSummary {
   sourceObservationCount: number;
   analysisObservationCount: number;
   missingObservationCount: number;
-
   duplicatePtsCollapsed: number;
   nonIncreasingTimestampCount: number;
   segmentCount: number;
-
   medianSmoothingCorrectionPixels: number;
   p95SmoothingCorrectionPixels: number;
   maximumSmoothingCorrectionPixels: number;
@@ -330,15 +280,13 @@ export interface ProcessedTrajectory {
   qc: TrajectoryQcSummary;
   settings: TrajectorySmoothingSettings;
 }
+
 export interface HoleRoi {
   index: number;
-
   automaticCenterX: number;
   automaticCenterY: number;
-
   centerX: number;
   centerY: number;
-
   radiusPixels: number;
   isTarget: boolean;
   manuallyAdjusted: boolean;
@@ -348,15 +296,19 @@ export interface HoleGeometry {
   holeCount: number;
   holeRadiusPixels: number;
   targetHoleIndex: number;
-
   homography: [
-    number,number,number,
-    number,number,number,
-    number,number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number
   ];
-
   holes: HoleRoi[];
 }
+
 export interface OrientationSettings {
   motionLookbackSeconds: number;
   minimumDirectionalSpeedPixelsPerSecond: number;
@@ -365,6 +317,7 @@ export interface OrientationSettings {
   minimumContinuityAlignment: number;
   minimumShapeConfidence: number;
 }
+
 export interface HoleInvestigationSettings {
   entryMarginPixels: number;
   sustainMarginPixels: number;
@@ -373,19 +326,12 @@ export interface HoleInvestigationSettings {
   minimumHeadHoleAlignment: number;
 }
 
-export type HoleEvidenceState =
-  | 'investigating'
-  | 'outside'
-  | 'near-but-misaligned'
-  | 'unknown';
-
+export type HoleEvidenceState = 'investigating' | 'outside' | 'near-but-misaligned' | 'unknown';
 export interface HoleInvestigationEvidence {
   presentationIndex: number;
   timeSeconds: number;
-
   noseX: number | null;
   noseY: number | null;
-
   state: HoleEvidenceState;
   holeIndex: number | null;
   distancePixels: number | null;
@@ -398,26 +344,18 @@ export interface HoleInvestigationEvent {
   eventIndex: number;
   holeIndex: number;
   isTarget: boolean;
-
   startPresentationIndex: number;
   endPresentationIndex: number;
-
   startTimeSeconds: number;
   endTimeSeconds: number;
   durationSeconds: number;
-
   positiveObservationCount: number;
-
   minimumNoseDistancePixels: number;
   closestNoseX: number;
   closestNoseY: number;
 }
-export type FinalHoleEventReviewStatus =
-  | 'unreviewed'
-  | 'confirmed'
-  | 'edited'
-  | 'manual-added';
 
+export type FinalHoleEventReviewStatus = 'unreviewed' | 'confirmed' | 'edited' | 'manual-added';
 export type FinalHoleEventProvenance =
   | 'automatic-unreviewed'
   | 'automatic-manually-confirmed'
@@ -425,22 +363,18 @@ export type FinalHoleEventProvenance =
   | 'manual-added';
 export interface ManualHoleEventAddition {
   id: string;
-
   /*
    * Stable creation order within this video session.
-   */
+  */
   ordinal: number;
-
   holeIndex: number;
-
   startPresentationIndex: number;
   endPresentationIndex: number;
-
   note: string;
-
   createdAtIso: string;
   updatedAtIso: string;
 }
+
 export interface FinalReviewedHoleInvestigationEvent {
   /*
    * Automatic events retain their original
@@ -448,133 +382,88 @@ export interface FinalReviewedHoleInvestigationEvent {
    *
    * Manual events receive a stable synthetic
    * index when the final set is constructed.
-   */
+  */
   eventIndex: number;
-
-  automaticEventIndex:
-    number | null;
-
-  manualEventId:
-    string | null;
-
+  automaticEventIndex: number | null;
+  manualEventId: string | null;
   finalEventKey: string;
-
   holeIndex: number;
   isTarget: boolean;
-
   startPresentationIndex: number;
   endPresentationIndex: number;
-
   startTimeSeconds: number;
   endTimeSeconds: number;
   durationSeconds: number;
-
   /*
    * These exist only for events originating
    * from the automatic detector.
-   */
-  positiveObservationCount:
-    number | null;
-
-  minimumNoseDistancePixels:
-    number | null;
-
-  closestNoseX:
-    number | null;
-
-  closestNoseY:
-    number | null;
-
-  reviewStatus:
-    FinalHoleEventReviewStatus;
-
-  provenance:
-    FinalHoleEventProvenance;
-
+  */
+  positiveObservationCount: number | null;
+  minimumNoseDistancePixels: number | null;
+  closestNoseX: number | null;
+  closestNoseY: number | null;
+  reviewStatus: FinalHoleEventReviewStatus;
+  provenance: FinalHoleEventProvenance;
   reviewNote: string;
-
-  reviewedAtIso:
-    string | null;
+  reviewedAtIso: string | null;
 }
+
 export interface EscapeDetectionSettings {
   minimumTerminalAbsenceSeconds: number;
-
   /*
    * How far backward from terminal disappearance
    * to inspect reliable body/nose positions.
-   */
+  */
   escapeLookbackSeconds: number;
-
   /*
    * Added to the calibrated physical hole radius
    * for escape-specific spatial proximity.
-   */
+  */
   escapeProximityMarginPixels: number;
-    /*
-   * Terminal segmentation may retain only part of the
-   * mouse while it enters the escape hole.
-   *
-   * Final body area below this fraction of the animal's
-   * normal tracked area is considered partial occlusion.
-   */
+  /*
+  * Terminal segmentation may retain only part of the
+  * mouse while it enters the escape hole.
+  *
+  * Final body area below this fraction of the animal's
+  * normal tracked area is considered partial occlusion.
+ */
   maximumTerminalBodyAreaFraction: number;
-
   /*
    * Low-area target-proximal evidence must persist for
    * at least this long before becoming an escape candidate.
-   */
+  */
   minimumTerminalCollapseSeconds: number;
-
   /*
    * Used for moderate evidence when a reviewed
    * target investigation precedes disappearance.
-   */
-  maximumSecondsFromTargetEndToDisappearance:
-    number;
-
+  */
+  maximumSecondsFromTargetEndToDisappearance: number;
   /*
    * Used only for weak evidence when the video
    * ends almost immediately after target contact.
-   */
-  maximumSecondsFromTargetEndToRecordingEnd:
-    number;
+  */
+  maximumSecondsFromTargetEndToRecordingEnd: number;
 }
 
-export type EscapeEvidenceStrength =
-  | 'strong'
-  | 'moderate'
-  | 'weak';
-
+export type EscapeEvidenceStrength = 'strong' | 'moderate' | 'weak';
 export type EscapeCandidateKind =
   | 'terminal-disappearance-at-target'
   | 'terminal-body-collapse-at-target'
   | 'target-associated-terminal-disappearance'
   | 'target-near-recording-end';
-
 export interface EscapeCandidate {
   candidateKey: string;
-
   kind: EscapeCandidateKind;
-
-  evidenceStrength:
-    EscapeEvidenceStrength;
-
+  evidenceStrength: EscapeEvidenceStrength;
   targetHoleIndex: number;
-
   /*
    * May be null because strong spatial evidence
    * does not require an accepted investigation
    * event immediately before escape.
-   */
-  targetEventIndex:
-    number | null;
-
-  targetEventStartTimeSeconds:
-    number | null;
-
-  targetEventEndTimeSeconds:
-    number | null;
-
+  */
+  targetEventIndex: number | null;
+  targetEventStartTimeSeconds: number | null;
+  targetEventEndTimeSeconds: number | null;
   /*
    * Operational escape time.
    *
@@ -583,79 +472,47 @@ export interface EscapeCandidate {
    *
    * For weak end-of-recording evidence this is
    * the associated target event end.
-   */
+  */
   escapePresentationIndex: number;
   escapeTimeSeconds: number;
-
   /*
    * For terminal disappearance these explicitly
    * describe the interval containing the true
    * transition from visible to absent.
-   */
-  lastDetectedPresentationIndex:
-    number | null;
-
-  lastDetectedTimeSeconds:
-    number | null;
-
-  firstMissingPresentationIndex:
-    number | null;
-
-  firstMissingTimeSeconds:
-    number | null;
-
+  */
+  lastDetectedPresentationIndex: number | null;
+  lastDetectedTimeSeconds: number | null;
+  firstMissingPresentationIndex: number | null;
+  firstMissingTimeSeconds: number | null;
   recordingEndPresentationIndex: number;
   recordingEndTimeSeconds: number;
-
   terminalAbsenceSeconds: number;
-
-  secondsFromTargetEndToCandidate:
-    number | null;
-
+  secondsFromTargetEndToCandidate: number | null;
   /*
    * Closest reliable positions to the target
    * during the pre-disappearance lookback.
-   */
-  minimumNoseDistanceToTargetPixels:
-    number | null;
-
-  minimumBodyDistanceToTargetPixels:
-    number | null;
-    baselineBodyAreaPixels:
-    number | null;
-
-  terminalBodyAreaPixels:
-    number | null;
-
-  terminalBodyAreaFraction:
-    number | null;
-
-  terminalCollapseSeconds:
-    number;
+  */
+  minimumNoseDistanceToTargetPixels: number | null;
+  minimumBodyDistanceToTargetPixels: number | null;
+  baselineBodyAreaPixels: number | null;
+  terminalBodyAreaPixels: number | null;
+  terminalBodyAreaFraction: number | null;
+  terminalCollapseSeconds: number;
   escapeRadiusPixels: number;
 }
-export type EscapeReviewStatus =
-  | 'unreviewed'
-  | 'confirmed'
-  | 'rejected'
-  | 'ambiguous';
 
+export type EscapeReviewStatus = 'unreviewed' | 'confirmed' | 'rejected' | 'ambiguous';
 export interface EscapeReviewDecision {
   candidateKey: string;
-
   status: EscapeReviewStatus;
-
   note: string;
-
-  reviewedAtIso:
-    string | null;
+  reviewedAtIso: string | null;
 }
 
 export interface HoleInvestigationQc {
   trialObservationCount: number;
   uniqueTimestampCount: number;
   duplicatePtsCollapsed: number;
-
   usableNoseObservations: number;
   unknownNoseObservations: number;
   positiveEvidenceObservations: number;
@@ -665,7 +522,6 @@ export interface HoleInvestigationQc {
   candidateEventCount: number;
   acceptedEventCount: number;
   rejectedShortEventCount: number;
-
 }
 
 export interface HoleInvestigationResult {
@@ -674,157 +530,90 @@ export interface HoleInvestigationResult {
   qc: HoleInvestigationQc;
   settings: HoleInvestigationSettings;
 }
+
 export interface QuadrantWindowMetrics {
   startTimeSeconds: number;
   endTimeSeconds: number;
   windowDurationSeconds: number;
-
   observedDurationSeconds: number;
   observedCoverageFraction: number | null;
-
   targetQuadrantTimeSeconds: number;
   targetQuadrantTimeFraction: number | null;
-
   totalPathPixels: number;
   targetQuadrantPathPixels: number;
   targetQuadrantPathFraction: number | null;
-
   targetQuadrantEntryCount: number;
   initiallyInsideTargetQuadrant: boolean;
-
   observationCount: number;
 }
 
 export interface TargetQuadrantMetrics {
   targetHoleIndex: number;
-
   targetAngleRadians: number;
-
   /*
    * A standard four-sector division:
    * target quadrant = +/-45 degrees around
    * the radial direction of the target hole.
-   */
+  */
   quadrantHalfWidthRadians: number;
-
-  analyzedTrial:
-    QuadrantWindowMetrics;
-
-  preTarget:
-    QuadrantWindowMetrics | null;
+  analyzedTrial: QuadrantWindowMetrics;
+  preTarget: QuadrantWindowMetrics | null;
 }
 
-export type SearchStrategy =
-  | 'direct'
-  | 'serial'
-  | 'random'
-  | 'uncertain';
-
+export type SearchStrategy = 'direct' | 'serial' | 'random' | 'uncertain';
 export interface SearchStrategySettings {
-    maxDirectPrimaryErrors: number;
-
+  maxDirectPrimaryErrors: number;
   /*
    * Direct search may contain repeated investigation
    * of one localized incorrect hole without representing
    * broad exploratory search.
-   */
+  */
   maxDirectUniqueIncorrectHoles: number;
-
   /*
    * Circular hole steps from the target.
    *
    * Example with 20 holes:
    * target 0 → holes 19 and 1 are distance 1.
-   */
+  */
   maxDirectIncorrectHoleDistance: number;
-
   minimumDirectPathEfficiency: number;
-
-  minimumSerialAdjacentTransitionFraction:
-    number;
-
-  minimumSerialDirectionalConsistency:
-    number;
-  maximumSerialDirectionReversalFraction:
-    number;
-
-  minimumSerialPerimeterTimeFraction:
-    number;
-
+  minimumSerialAdjacentTransitionFraction: number;
+  minimumSerialDirectionalConsistency: number;
+  maximumSerialDirectionReversalFraction: number;
+  minimumSerialPerimeterTimeFraction: number;
   perimeterRadiusFraction: number;
-
   minimumTransitionsForSerial: number;
 }
 
-export type SearchStrategyConfidence =
-  | 'high'
-  | 'moderate'
-  | 'low';
-
+export type SearchStrategyConfidence = 'high' | 'moderate' | 'low';
 export interface SearchStrategyResult {
-  automaticStrategy:
-    SearchStrategy;
-
-  confidence:
-    SearchStrategyConfidence;
-
+  automaticStrategy: SearchStrategy;
+  confidence: SearchStrategyConfidence;
   targetReached: boolean;
-
   searchStartTimeSeconds: number;
   searchEndTimeSeconds: number;
-
   searchPathLengthPixels: number;
-
-  straightLineDisplacementPixels:
-    number;
-
-  pathEfficiency:
-    number | null;
-
-    primaryErrorCount: number;
-
+  straightLineDisplacementPixels: number;
+  pathEfficiency: number | null;
+  primaryErrorCount: number;
   uniqueIncorrectHoleCount: number;
-
   repeatedPrimaryErrorCount: number;
-
-  maximumIncorrectHoleDistanceFromTarget:
-    number | null;
-
-  investigatedHoleSequence:
-    number[];
-
+  maximumIncorrectHoleDistanceFromTarget: number | null;
+  investigatedHoleSequence: number[];
   holeTransitionCount: number;
-
   adjacentTransitionCount: number;
-
-  adjacentTransitionFraction:
-    number | null;
-
-  directionalConsistency:
-    number | null;
-
+  adjacentTransitionFraction: number | null;
+  directionalConsistency: number | null;
   directionReversalCount: number;
-
-  directionReversalOpportunityCount:
-    number;
-
-  directionReversalFraction:
-    number | null;
-
-  perimeterTimeFraction:
-    number | null;
-
-  unreviewedInvestigationCount:
-    number;
-
+  directionReversalOpportunityCount: number;
+  directionReversalFraction: number | null;
+  perimeterTimeFraction: number | null;
+  unreviewedInvestigationCount: number;
   reasoning: string[];
 }
 
 export interface SearchStrategyOverride {
-  strategy:
-    SearchStrategy;
-
+  strategy: SearchStrategy;
   note: string;
-
   updatedAtIso: string;
 }
