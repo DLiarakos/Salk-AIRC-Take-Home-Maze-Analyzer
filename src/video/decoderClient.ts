@@ -2,6 +2,8 @@ import type { FrameTiming, VideoMetadata } from '../models/media';
 import type { DecoderRequest, DecoderResponse } from './messages';
 import {validateFrameTimings,type TimingValidation,} from './timingValidation';
 import type {RepresentativeFrame,} from '../models/tracking';
+import type {BackgroundModel,} from '../models/tracking';
+
 export interface DecodeResult {
   metadata: VideoMetadata;
   frames: FrameTiming[];
@@ -9,6 +11,8 @@ export interface DecodeResult {
   timingValidation: TimingValidation;
   representativeFrames:
     RepresentativeFrame[];
+  background:
+  BackgroundModel | null;
 }
 
 export function decoderCapabilities(): { webCodecs: boolean } {
@@ -27,6 +31,7 @@ export function decodeVideoFile(
   });
 
   let metadata: VideoMetadata | null = null;
+  let background: BackgroundModel | null = null;
   const frames: FrameTiming[] = [];
   const representativeFrames:
   RepresentativeFrame[] = [];
@@ -52,10 +57,36 @@ export function decodeVideoFile(
             message.frame,
           );
           break;
-        case 'done':
+        case 'background-model':
+          
+          background =
+            message.background;
+          
+          break;
+          
+       case 'done':
           if (!metadata) {
-            reject(new Error('Decoder completed without video metadata.'));
-          } else {
+            reject(
+              new Error(
+                'Decoder completed without video metadata.',
+              ),
+            );
+
+            worker.terminate();
+            break;
+          }
+
+          if (!background) {
+            reject(
+              new Error(
+                'Decoder completed without a background model.',
+              ),
+            );
+
+            worker.terminate();
+            break;
+            }
+            {
             // Do not assume callback order. Scientific processing will consume
             // presentation order explicitly.
             frames.sort(
@@ -74,9 +105,7 @@ export function decodeVideoFile(
               metadata.trackTimescale,
             );
             resolve({
-              metadata,frames: presentationFrames,decodedFrames:message.decodedFrames,
-              timingValidation,
-              representativeFrames,
+              metadata,frames: presentationFrames,decodedFrames:message.decodedFrames,timingValidation,representativeFrames, background,
             });
           }
           worker.terminate();

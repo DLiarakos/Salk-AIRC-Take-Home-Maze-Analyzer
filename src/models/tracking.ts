@@ -1,4 +1,4 @@
-import type { FrameTiming } from './media';
+import type { FrameTiming,RationalTime } from './media';
 
 export interface GrayscaleStats {
   minimum: number;
@@ -64,4 +64,139 @@ export interface ArenaCalibration {
    * Later used for pixels → centimeters conversion.
    */
   platformDiameterCm: number | null;
+}
+export interface BackgroundSample {
+  decodedIndex: number;
+  pixels: Uint8Array;
+}
+
+export interface BackgroundModel {
+  width: number;
+  height: number;
+  pixels: Uint8Array;
+  sampleCount: number;
+}
+
+export interface SegmentationSettings {
+  /**
+   * Minimum amount by which a pixel must become
+   * darker than the background to count as foreground.
+   */
+  differenceThreshold: number;
+
+  /**
+   * Ignore connected foreground regions smaller
+   * than this many pixels.
+   */
+  minimumComponentAreaPixels: number;
+}
+
+export interface SegmentationResult {
+  width: number;
+  height: number;
+
+  /**
+   * background - current frame, clamped to 0–255.
+   */
+  difference: Uint8Array;
+
+  /**
+   * 0 = background
+   * 1 = candidate foreground
+   */
+  foregroundMask: Uint8Array;
+
+  foregroundPixelCount: number;
+}
+export interface ForegroundComponent {
+  id: number;
+
+  areaPixels: number;
+
+  centroidX: number;
+  centroidY: number;
+
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+
+  /**
+   * Indices into the flattened width × height image.
+   */
+  pixelIndices: number[];
+}
+
+export interface ComponentAnalysis {
+  components: ForegroundComponent[];
+
+  /**
+   * Components meeting the configured minimum area.
+   */
+  retainedComponents: ForegroundComponent[];
+
+  /**
+   * Largest retained component, if one exists.
+   *
+   * For the first prototype this is our mouse candidate.
+   */
+  largestComponent:
+    ForegroundComponent | null;
+}
+export type BodyVisibility =
+  | 'visible'
+  | 'partial'
+  | 'not-detected';
+
+export interface BodyDetection {
+  x: number;
+  y: number;
+
+  areaPixels: number;
+
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+
+  visibility: BodyVisibility;
+
+  /**
+   * Fraction of all retained foreground pixels
+   * belonging to the selected body component.
+   */
+  dominance: number;
+}
+export interface BodyTrackPoint {
+  /**
+   * Presentation-order frame number.
+   * Diagnostic only — behavioral timing uses PTS.
+   */
+  presentationIndex: number;
+
+  /**
+   * Exact MP4 presentation timestamp.
+   */
+  pts: RationalTime;
+
+  x: number | null;
+  y: number | null;
+
+  areaPixels: number | null;
+  dominance: number | null;
+
+  visibility: BodyVisibility;
+
+  foregroundPixelCount: number;
+  retainedComponentCount: number;
+}
+
+export interface BodyTrack {
+  width: number;
+  height: number;
+
+  points: BodyTrackPoint[];
+
+  detectedFrameCount: number;
+  missingFrameCount: number;
 }
