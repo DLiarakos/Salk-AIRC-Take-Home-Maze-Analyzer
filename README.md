@@ -1,6 +1,6 @@
 # Barnes Maze Analyzer
 
-**Live application:** [ADD LIVE URL]  
+**Live application:** https://dliarakos.github.io/Salk-AIRC-Take-Home-Maze-Analyzer/
 **Demo video:** [ADD DEMO VIDEO URL]  
 **Take-home repository / sample videos:** https://github.com/salk-airc/rse-takehome-2026/
 
